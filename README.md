@@ -491,17 +491,6 @@ Primary references: [GitLab requirements](https://docs.gitlab.com/install/requir
 
 ## OCI cost estimate
 
-[The estimator JSON](bom/oci-gitlab-cost-estimate.json) budgets **$4,285.41 USD/month before credits, discounts and tax** for a continuously deployed Ashburn Dev environment with three runner nodes and one benchmark suite per day over a 744-hour month. [The assumptions and coverage audit](bom/oci-gitlab-cost-assumptions.json) separates benchmark observations from planning allowances.
+Upload [the estimator JSON](bom/oci-gitlab-cost-estimate.json) to the [OCI Cost Estimator](https://www.oracle.com/cloud/costestimator.html) to view pricing and adjust the configuration for your environment.
 
-The latest 80-test suite took about 84 minutes and reported about 14.5 GB of response data. Monthly usage assumptions include:
-
-- 50 GiB main PostgreSQL storage and 10 GiB Praefect storage, with a provisional 30 VPUs/GiB pricing assumption.
-- 512 GiB application objects/versions/backups and 10 million Object Storage requests.
-- 1024 GiB retained Gitaly snapshots and 1800 GiB retained PostgreSQL backups.
-- Both load balancers at 1000 Mbps for two hours daily and their 100 Mbps minimum otherwise.
-- 1024 GB external outbound transfer without free-tier credits; same-region benchmark traffic is not automatically internet egress.
-- A 1 TiB backup scratch volume for two hours daily: 62 allocated hours, budgeted at $3.63/month.
-
-Disk footprints, backup sizes/duration and OCI billing meters were not captured. These are explicit planning allowances, not measured usage. The budget assumes a roughly stable Dev dataset; current versioning and backup retention can accumulate more data. This estimate does not install schedules or retention limits. DNS, paid GitLab subscriptions, external mail/observability and disaster recovery are outside this configuration.
-
-The original exporter version/build metadata is retained, and the configs checksum is regenerated using the calculation verified against the original export. Browser import/recalculation in the OCI Cost Estimator has not been verified.
+The estimate assumes a continuously deployed Ashburn Dev environment with three runner nodes and one benchmark suite per day. Review [the assumptions and coverage audit](bom/oci-gitlab-cost-assumptions.json) for storage, backups, traffic and usage projections before using it for planning.
