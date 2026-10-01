@@ -1,7 +1,7 @@
 {
   "reviewed_on": "2026-10-01",
   "estimate_file": "oci-gitlab-cost-estimate.json",
-  "status": "configured_capacity_complete_usage_budget_incomplete",
+  "status": "planning_estimate_all_usage_inputs_assumed",
   "scope": {
     "region": "us-ashburn-1",
     "mode": "Dev",
@@ -18,15 +18,16 @@
     ],
     "currency": "USD",
     "pricing_basis": "Public US-dollar list rates; no contract discount, tax or free-tier credit applied. Not the invoice for the short benchmark run.",
-    "export_metadata": "Original Oracle exporter metadata is retained as provenance; quantities, labels and costs were locally reviewed. Import into OCI Cost Estimator has not been tested."
+    "export_metadata": "Original Oracle exporter version/build metadata retained. meta.hash regenerated as MD5 of JavaScript JSON.stringify(configs), with the algorithm verified against the original export. Browser import has not been tested.",
+    "scenario": "One full 80-endpoint supported suite per day for 31 days, using the existing benchmark fixture in a continuously deployed Dev environment. No paid GitLab features, remote DR or external monitoring. This changes the budget only; it does not schedule jobs or configure retention."
   },
   "totals": {
-    "previous_export_monthly_usd": 3994.34,
-    "configured_capacity_subtotal_usd": 4209.59,
-    "unknown_usage_costs_usd": null,
-    "complete_monthly_estimate_usd": null,
-    "scratch_full_month_budget_included_usd": 43.52,
-    "fixed_subtotal_without_ephemeral_scratch_usd": 4166.07
+    "previous_configured_capacity_subtotal_usd": 4209.59,
+    "monthly_planning_estimate_usd": 4285.41,
+    "annual_planning_estimate_usd_12_identical_months": 51424.92,
+    "scratch_62_hour_budget_included_usd": 3.63,
+    "tax_and_discounts_included": false,
+    "free_tier_credit_assumed_usd": 0
   },
   "corrections": [
     {
@@ -54,6 +55,10 @@
     {
       "component": "Credits and arithmetic",
       "reason": "Removed implicit load-balancer free-tier deductions; all extended costs use gross quantity x rate and decimal half-up cent rounding."
+    },
+    {
+      "component": "Usage planning",
+      "reason": "Replaced all unset usage fields with explicit benchmark-informed monthly planning assumptions at user request; prorated scratch allocation and included LB burst headroom."
     }
   ],
   "coverage": [
@@ -84,8 +89,8 @@
     },
     {
       "component": "PostgreSQL data storage and performance",
-      "status": "input_required",
-      "quantity": "Shared database storage and VPU usage for each system; 75K IOPS configured"
+      "status": "included_with_planning_assumptions",
+      "quantity": "Main 50 GiB / 1500 VPU-GB-month; Praefect 10 GiB / 300 VPU-GB-month; shared storage, assumed 30 VPUs/GiB"
     },
     {
       "component": "Redis",
@@ -104,32 +109,32 @@
     },
     {
       "component": "Load balancers",
-      "status": "minimum_included",
-      "quantity": "2 flexible LBs, 100 Mbps minimum each, 1000 Mbps maximum each; usage above minimum is extra"
+      "status": "minimum_and_bursts_included",
+      "quantity": "2 LBs, each 175 Mbps weighted average: 22h/day at 100 Mbps and 2h/day at 1000 Mbps"
     },
     {
       "component": "Backup scratch PVC",
-      "status": "full_month_budget_included",
-      "quantity": "1024 GiB Balanced ephemeral volume; reduce by actual cumulative allocation hours / 744"
+      "status": "allocation_time_budget_included",
+      "quantity": "1024 GiB Balanced volume for 62 hours/month; 3.63 USD"
     },
     {
       "component": "11 versioned application buckets and GitLab backups",
-      "status": "input_required",
+      "status": "included_with_planning_assumptions",
       "quantity": "Live objects, prior versions, retained application backups, temporary staging and incomplete multipart data; requests counted separately"
     },
     {
       "component": "Gitaly gold-policy snapshots",
-      "status": "input_required",
+      "status": "included_with_planning_assumptions",
       "quantity": "Retained incremental/full backup storage across 3 replica volumes, including policy retention beyond one month"
     },
     {
       "component": "PostgreSQL managed backups",
-      "status": "input_required",
+      "status": "included_with_planning_assumptions",
       "quantity": "Daily backups with 30-day retention across both systems"
     },
     {
       "component": "Outbound transfer",
-      "status": "input_required",
+      "status": "included_with_planning_assumptions",
       "quantity": "Internet and any cross-region transfer; same-region load-generator traffic does not imply internet egress"
     },
     {
@@ -153,32 +158,16 @@
       "quantity": "No paid GitLab entitlement or commercial image fee configured; license/SMTP/domain/remote backups/secondary region costs need separate budgets if selected"
     }
   ],
-  "required_usage_inputs": {
-    "postgres_main_average_storage_gb_month": null,
-    "postgres_praefect_average_storage_gb_month": null,
-    "postgres_main_billable_vpu_gb_month": null,
-    "postgres_praefect_billable_vpu_gb_month": null,
-    "application_objects_and_versions_average_gb_month": null,
-    "object_requests_in_units_of_10000": null,
-    "gitaly_retained_backup_gb_month": null,
-    "postgres_retained_backup_gb_month": null,
-    "load_balancer_mbps_hours_above_100_per_lb": null,
-    "outbound_billable_gb_after_shared_allowance": null,
-    "scratch_cumulative_volume_hours": null,
-    "available_tenancy_free_tier_credits": null
-  },
   "calculation_notes": [
-    "A quantity of zero on an UNSET line means no usage cost has been included; it is not a zero-usage assertion. The complete monthly estimate remains null until usage inputs are supplied.",
-    "Monthly SKU amounts are not multiplied by 744; hourly SKUs are. Request quantity is in units of 10,000 requests.",
-    "Database storage is shared across its three nodes; do not multiply storage blindly by replica count. Storage is dynamically metered.",
-    "The old export used 30 VPUs per database storage GiB for the 75K tier. Oracle billing documents confirm VPU charging, but the exact managed-service mapping was not verified here; supply billable VPU-GB usage or confirm with the estimator before finalizing.",
-    "Gitaly snapshot and PostgreSQL backup storage use standard Object Storage rates. Application backups already belong in the application bucket total; do not count them again as managed database or volume backups.",
-    "Object versions have no lifecycle expiry configured. Storage can grow even when current live object size is unchanged.",
-    "Load balancer billed bandwidth can rise to the configured 1000 Mbps maximum per LB. Full-month gross minimum is 31.69 USD; full-month 2x1000 Mbps is 165.61 USD.",
-    "Free allowances are shared/eligibility-dependent. The previous LB cost implicitly deducted one instance and 10 Mbps; this review reports gross cost to avoid assuming those credits are available.",
-    "Boot and ephemeral scratch performance is budgeted at the default Balanced 10 VPUs/GiB. Review if the CSI storage class or boot performance is changed.",
-    "19 user-managed/OKE VMs are counted, plus 6 managed PostgreSQL nodes. Additional Kubernetes pods on existing workers are not separately billed compute.",
-    "Changing runner_count, mode, shapes, repository size, replicas, storage class, backup scratch or LB limits requires updating this estimate."
+    "All usage quantities are filled with the planning assumptions above; the total is a budget, not a measured invoice or a forecast of indefinite data growth.",
+    "Hourly SKU amounts use quantity x hourly rate x allocated hours. Monthly capacity/VPU SKU amounts use quantity x monthly rate x allocated hours / 744. Scratch uses 62 hours; other monthly storage inputs are monthly average retained quantities over 744 hours.",
+    "Request quantity is in units of 10,000 requests. Gross prices exclude discounts, credits and tax; the OCI estimator may recalculate account/free-tier deductions on import.",
+    "Database storage is shared across each three-node system; node replication does not multiply the modeled storage quantity. Standard E5 compute and the PostgreSQL service fee are separate charges.",
+    "Object storage, application backups, Gitaly snapshots and managed PostgreSQL backups represent separate data populations; no application backup is counted again as a managed database or volume snapshot.",
+    "Two load balancers have 2 base-instance units and 350 aggregate weighted-average Mbps units; the real deployed limits remain 100\u20131000 Mbps per LB.",
+    "Thirty-one daily suites and two-hour scratch/burst budgets are assumptions, not schedules installed by this cost update.",
+    "The fixed 19 user/OKE VMs plus six managed database nodes remain continuously billed; benchmark pods use already-budgeted runner capacity.",
+    "Changing capacity, test frequency, retained datasets, backup duration or retention requires recalculating this budget. Configured gold snapshots and versioned buckets may grow beyond the first-month allowance."
   ],
   "sources": {
     "usd_price_list": "https://www.oracle.com/il-en/a/ocom/docs/corporate/pricing/oracle-paas-and-iaas-global-price-list.pdf",
@@ -189,5 +178,96 @@
     "lb_billing": "https://docs.oracle.com/en-us/iaas/Content/Balance/Tasks/managingloadbalancer_topic-Creating_Load_Balancers.htm",
     "volume_backups": "https://docs.oracle.com/en-us/iaas/Content/Block/Tasks/schedulingvolumebackups.htm",
     "network_pricing": "https://www.oracle.com/cloud/networking/virtual-cloud-network/pricing/"
-  }
+  },
+  "benchmark_evidence": {
+    "run": "benchmark-20261001165948",
+    "native_results": "identity/dev/benchmark/benchmark-20261001165948/oke-2k_v19-4-0-ee_2026-10-01_184402/oke-2k_v19-4-0-ee_2026-10-01_184402_results.json",
+    "executed": 80,
+    "passed": 80,
+    "duration_seconds": 5062.37,
+    "response_data_gb_approx": 14.503902,
+    "endpoints_with_parsed_transfer": 80,
+    "largest_endpoint_reported_mean_mbps": 912.0,
+    "http_requests_approx_from_sum_rps_times_60": 100225,
+    "monthly_response_data_gb_at_31_runs": 449.62,
+    "monthly_requests_approx_at_31_runs": 3106963,
+    "limitations": "Transfer values are rounded upstream endpoint summaries, not OCI billing meters. Request count is derived from reported RPS and the 60-second profile. Same-region runner traffic is not assumed to be billable internet egress. No retained measurements establish database disk bytes, object bytes, backup size, backup duration or actual load-balancer billed bandwidth."
+  },
+  "planning_inputs": {
+    "benchmark_runs_per_month": 31,
+    "deployment_hours_per_month": 744,
+    "postgres_main_average_storage_gb_month": 50,
+    "postgres_praefect_average_storage_gb_month": 10,
+    "postgres_vpus_per_storage_gb_assumed": 30,
+    "postgres_main_billable_vpu_gb_month": 1500,
+    "postgres_praefect_billable_vpu_gb_month": 300,
+    "application_objects_and_versions_average_gb_month": 512,
+    "object_requests_in_units_of_10000": 1000,
+    "gitaly_retained_backup_gb_month": 1024,
+    "postgres_retained_backup_gb_month": 1800,
+    "load_balancer_peak_mbps_each": 1000,
+    "load_balancer_peak_hours_per_day_each": 2,
+    "load_balancer_mbps_hours_above_100_per_lb": 55800,
+    "load_balancer_weighted_average_mbps_each": 175,
+    "outbound_billable_gb_budget_no_credit": 1024,
+    "scratch_cumulative_volume_hours": 62,
+    "available_tenancy_free_tier_credits_assumed_usd": 0
+  },
+  "assumption_rationale": [
+    {
+      "component": "Monthly workload",
+      "basis": "projection",
+      "reason": "One daily suite gives about 3.11 million benchmark requests and 450 GB of response data per month at the latest observed profile. Generator preparation, retries and ordinary Dev use need additional headroom. Keep the fixture roughly stable; repeated creation of fresh datasets without removal would accumulate data."
+    },
+    {
+      "component": "Database storage",
+      "basis": "planning allowance, not measured",
+      "reason": "50 GiB for GitLab and 10 GiB for Praefect budget room for the 10,000-project/1,000-subgroup fixture, imported GitLab project, indexes, metadata and scenario writes. These are monthly average billable storage assumptions, not Terraform provisioned capacities."
+    },
+    {
+      "component": "Database performance",
+      "basis": "provisional pricing assumption",
+      "reason": "Retain the original estimator assumption of 30 VPUs per storage GiB for the configured 75K IOPS tier. The precise managed PostgreSQL billing mapping remains unverified; 1500 and 300 VPU-GB-month are modeled, not measured."
+    },
+    {
+      "component": "Objects and application backups",
+      "basis": "planning allowance, not measured",
+      "reason": "512 GiB average comprises 128 GiB live/versioned application data, 256 GiB GitLab backup allowance (32 copies at 8 GiB), 64 GiB registry/packages and 64 GiB temporary staging. None is a measured footprint. The current configuration does not expire versions/backups at these budgets; costs grow without cleanup."
+    },
+    {
+      "component": "Object requests",
+      "basis": "planning allowance, not measured",
+      "reason": "10 million requests/month leaves headroom above about 3.11 million monthly benchmark HTTP requests for storage operations, uploads, backup traffic and setup. GitLab HTTP requests do not map one-to-one to Object Storage operations."
+    },
+    {
+      "component": "Gitaly volume backups",
+      "basis": "planning allowance, not measured",
+      "reason": "1024 GiB of retained billable backup data across all three replicas allows for full/incremental snapshots and repository changes. Gold retention includes longer-lived snapshots, so this is a first-month Dev budget rather than a steady-state retention forecast."
+    },
+    {
+      "component": "PostgreSQL backups",
+      "basis": "conservative projection",
+      "reason": "Budget all 30 retained daily backups at the full combined assumed 60 GiB database size: 1800 GiB. Compression/incremental sharing and initial retention ramp-up may reduce actual billing."
+    },
+    {
+      "component": "Load balancer bursts",
+      "basis": "conservative projection",
+      "reason": "The latest run reports an endpoint-average response rate near 912 Mbps. Budget both LBs at their 1000 Mbps maximum for two hours daily, covering the 84-minute suite plus margin; 100 Mbps minimum for the other 22 hours. This is 175 Mbps per LB as a monthly weighted average, not a configuration change."
+    },
+    {
+      "component": "External transfer",
+      "basis": "planning allowance, not measured",
+      "reason": "1024 GB/month of external downloads, clones, artifacts and other Dev traffic. The approximately 450 GB monthly benchmark response data travels between same-region OCI resources and is not automatically treated as billed internet egress. No credit is taken for shared free allowances."
+    },
+    {
+      "component": "Backup scratch duration",
+      "basis": "planning allowance, not measured",
+      "reason": "Two hours per daily backup gives 62 volume-hours for a 1024 GiB Balanced volume. Actual backup duration was not measured. Failed jobs or delayed PVC cleanup can increase allocation time; full-month scratch would add 39.89 USD."
+    },
+    {
+      "component": "Free tier, DNS and optional services",
+      "basis": "explicit scenario selection",
+      "reason": "Zero free-tier credits are applied to avoid depending on other tenancy usage. DNS, paid licensing, external mail/monitoring and DR remain outside this Dev configuration, not unresolved usage inputs."
+    }
+  ]
 }

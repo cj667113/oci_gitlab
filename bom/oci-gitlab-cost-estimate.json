@@ -1,5 +1,5 @@
 {
-  "label": "GitLab OCI - Dev Ashburn - configured capacity subtotal; usage inputs UNSET; before free-tier credits",
+  "label": "GitLab OCI - Dev Ashburn - 31 daily benchmark runs; 744-hour deployment; planning estimate before credits/tax",
   "timeFrame": {
     "months": 1,
     "from": null,
@@ -17,7 +17,7 @@
       "realm": "public",
       "serviceType": "paas"
     },
-    "hash": "e7038509b760fcd7e229e6e84df55693"
+    "hash": "112de1ba0da6652362f1d114c8c6c80f"
   },
   "configs": [
     {
@@ -434,7 +434,7 @@
       "addBySearch": true
     },
     {
-      "label": "11 PostgreSQL main: 3 E5 nodes x 2 OCPU / 32 GiB; storage and VPU usage UNSET (0 excludes cost); 75K IOPS",
+      "label": "11 PostgreSQL main: 3 E5 nodes x 2 OCPU / 32 GiB; assumed 50 GiB shared storage and 30 VPUs/GiB",
       "services": [
         {
           "id": 822,
@@ -499,10 +499,10 @@
             },
             {
               "sku": "B99062",
-              "quantity": 0,
+              "quantity": 50,
               "minQuantity": 0,
               "unitPrice": 0.072,
-              "monthlyCost": 0.0
+              "monthlyCost": 3.6
             }
           ],
           "uiState": {},
@@ -528,10 +528,10 @@
           "items": [
             {
               "sku": "B91962",
-              "quantity": 0,
+              "quantity": 1500,
               "minQuantity": 0,
               "unitPrice": 0.0017,
-              "monthlyCost": 0.0
+              "monthlyCost": 2.55
             }
           ],
           "uiState": {},
@@ -541,7 +541,7 @@
       "addBySearch": true
     },
     {
-      "label": "12 PostgreSQL praefect: 3 E5 nodes x 2 OCPU / 32 GiB; storage and VPU usage UNSET (0 excludes cost); 75K IOPS",
+      "label": "12 PostgreSQL praefect: 3 E5 nodes x 2 OCPU / 32 GiB; assumed 10 GiB shared storage and 30 VPUs/GiB",
       "services": [
         {
           "id": 822,
@@ -606,10 +606,10 @@
             },
             {
               "sku": "B99062",
-              "quantity": 0,
+              "quantity": 10,
               "minQuantity": 0,
               "unitPrice": 0.072,
-              "monthlyCost": 0.0
+              "monthlyCost": 0.72
             }
           ],
           "uiState": {},
@@ -635,10 +635,10 @@
           "items": [
             {
               "sku": "B91962",
-              "quantity": 0,
+              "quantity": 300,
               "minQuantity": 0,
               "unitPrice": 0.0017,
-              "monthlyCost": 0.0
+              "monthlyCost": 0.51
             }
           ],
           "uiState": {},
@@ -683,7 +683,7 @@
       "addBySearch": true
     },
     {
-      "label": "14 Load balancers: public Traefik + private Praefect; 2 x 100 Mbps minimum; gross cost before credits; bursts extra",
+      "label": "14 Two LBs: each 100 Mbps for 22h/day + 1000 Mbps for 2h/day = 175 Mbps weighted average each",
       "services": [
         {
           "id": 885,
@@ -712,10 +712,10 @@
             },
             {
               "sku": "B93031",
-              "quantity": 200,
+              "quantity": 350,
               "minQuantity": 0,
               "unitPrice": 0.0001,
-              "monthlyCost": 14.88
+              "monthlyCost": 26.04
             }
           ],
           "uiState": {},
@@ -725,16 +725,16 @@
       "addBySearch": true
     },
     {
-      "label": "15 Backup scratch: 1024 GiB / 10 VPUs; full-month reservation budget; actual ephemeral lifetime may be shorter",
+      "label": "15 Backup scratch: 1024 GiB / 10 VPUs, assumed 2h/day x 31 days = 62 volume-hours",
       "services": [
         {
           "id": 881,
           "label": "Storage - Block Volumes",
           "utilization": {
             "instances": 1,
-            "hours": 24,
+            "hours": 2,
             "days": 31,
-            "hoursPerMonth": 744,
+            "hoursPerMonth": 62,
             "foreignInstanceMultiplier": {
               "value": 1,
               "description": ""
@@ -750,14 +750,14 @@
               "quantity": 1024,
               "minQuantity": 0,
               "unitPrice": 0.0255,
-              "monthlyCost": 26.11
+              "monthlyCost": 2.18
             },
             {
               "sku": "B91962",
               "quantity": 10240,
               "minQuantity": 0,
               "unitPrice": 0.0017,
-              "monthlyCost": 17.41
+              "monthlyCost": 1.45
             }
           ],
           "uiState": {},
@@ -767,7 +767,7 @@
       "addBySearch": true
     },
     {
-      "label": "16 Versioned objects across 11 buckets incl. GitLab application backups; retained GB-month and request units UNSET (0 excludes cost)",
+      "label": "16 Versioned application objects + GitLab backups: assumed 512 GiB monthly average and 10 million object requests",
       "services": [
         {
           "id": 882,
@@ -789,17 +789,17 @@
           "items": [
             {
               "sku": "B91628",
-              "quantity": 0,
+              "quantity": 512,
               "minQuantity": 0,
               "unitPrice": 0.0255,
-              "monthlyCost": 0.0
+              "monthlyCost": 13.06
             },
             {
               "sku": "B91627",
-              "quantity": 0,
+              "quantity": 1000,
               "minQuantity": 0,
               "unitPrice": 0.0034,
-              "monthlyCost": 0.0
+              "monthlyCost": 3.4
             }
           ],
           "uiState": {},
@@ -809,7 +809,7 @@
       "addBySearch": true
     },
     {
-      "label": "17 Outbound transfer from Ashburn: billable GB UNSET (0 excludes cost); account allowance and traffic must be supplied",
+      "label": "17 External outbound transfer: 1024 GB/month planning allowance; no free-transfer credits assumed",
       "services": [
         {
           "id": 884,
@@ -831,10 +831,10 @@
           "items": [
             {
               "sku": "B88327",
-              "quantity": 0,
+              "quantity": 1024,
               "minQuantity": 0,
               "unitPrice": 0.0085,
-              "monthlyCost": 0.0
+              "monthlyCost": 8.7
             }
           ],
           "uiState": {},
@@ -844,7 +844,7 @@
       "addBySearch": true
     },
     {
-      "label": "18 Gitaly gold-policy block-volume backups: total retained billable GB-month across all 3 volumes UNSET (0 excludes cost)",
+      "label": "18 Gitaly gold-policy snapshots: assumed 1024 GiB average retained backup storage across all 3 replica volumes",
       "services": [
         {
           "id": 882,
@@ -866,10 +866,10 @@
           "items": [
             {
               "sku": "B91628",
-              "quantity": 0,
+              "quantity": 1024,
               "minQuantity": 0,
               "unitPrice": 0.0255,
-              "monthlyCost": 0.0
+              "monthlyCost": 26.11
             }
           ],
           "uiState": {},
@@ -879,7 +879,7 @@
       "addBySearch": true
     },
     {
-      "label": "19 PostgreSQL managed backups: total retained billable GB-month across both systems, daily/30-day retention UNSET (0 excludes cost)",
+      "label": "19 PostgreSQL backups: assumed (50 + 10) GiB x 30 retained daily copies = 1800 GiB; no deduplication credit",
       "services": [
         {
           "id": 882,
@@ -901,10 +901,10 @@
           "items": [
             {
               "sku": "B91628",
-              "quantity": 0,
+              "quantity": 1800,
               "minQuantity": 0,
               "unitPrice": 0.0255,
-              "monthlyCost": 0.0
+              "monthlyCost": 45.9
             }
           ],
           "uiState": {},
