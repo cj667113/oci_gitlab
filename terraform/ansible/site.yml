@@ -109,7 +109,6 @@
         name: [acl, ca-certificates, curl, openssh-server, tzdata, xfsprogs, python3-psycopg2, iptables-persistent]
         state: present
         update_cache: true
-        cache_valid_time: 3600
     - name: Create GitLab configuration directories
       ansible.builtin.file:
         path: '{{ item }}'

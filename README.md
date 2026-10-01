@@ -181,6 +181,7 @@ PY_KUBE
 
 ssh -F "$DEPLOY_IDENTITY/ssh_config" \
   -o ExitOnForwardFailure=yes -o ControlMaster=yes \
+  -o ServerAliveInterval=30 -o ServerAliveCountMax=6 \
   -o ControlPath="$DEPLOY_IDENTITY/bastion-control" \
   -fNT -L "127.0.0.1:16443:$(cat "$DEPLOY_IDENTITY/oke-api-host"):6443" \
   gitlab-bastion
@@ -414,7 +415,7 @@ The linked [2k architecture](https://docs.gitlab.com/administration/reference_ar
 | Redis | OCI Cache Redis 7, 3 nodes, 8 GiB each | Non-sharded primary/replicas, TLS, `noeviction` |
 | Objects | 11 private, versioned OCI Object Storage buckets | S3 compatibility API; separate buckets for each data class |
 | Public ingress | OCI flexible load balancer, reserved IP | TCP 443/80/22, plus 5050/8150 for IP access; HTTPS terminates in HA Traefik |
-| Monitoring | 2 Prometheus replicas, plus backend exporters | Independent scrapers; ephemeral two-day history |
+| Monitoring | 2 Prometheus replicas, backend exporters, and the managed OKE metrics-server add-on | Independent scrapers; ephemeral two-day history; certificate-manager supplies the metrics add-on dependency |
 | Load generation | Optional dedicated OKE nodes, each 4 OCPU / 16 GiB; count set by `runner_count` | GitLab Runner job pods and Ansible k6 jobs select only this pool |
 
 On the default x86 shapes, one OCPU is two vCPUs. This is intentionally larger than a single-node 2k installation. The application uses 15 compute/OKE nodes plus 6 managed PostgreSQL instances and 3 cache nodes. Dev additionally provisions one public bastion VM and, with `runner_count = 3`, three dedicated OKE runner nodes. Review quotas and the Terraform plan before applying.
@@ -486,3 +487,12 @@ The runbook's Terraform validation/plan, Ansible connectivity checks, public rea
 - **Initial password no longer works:** the inventory stores the bootstrap password, not later password changes.
 
 Primary references: [GitLab requirements](https://docs.gitlab.com/install/requirements/), [Gitaly Cluster](https://docs.gitlab.com/administration/gitaly/praefect/configure/), [OKE networking](https://docs.oracle.com/en-us/iaas/Content/ContEng/Concepts/contengnetworkconfig.htm), and [OCI Terraform provider](https://docs.oracle.com/en-us/iaas/tools/terraform-provider-oci/latest/).
+
+
+## OCI cost estimate
+
+[The estimator JSON](bom/oci-gitlab-cost-estimate.json) covers the current Dev configuration in Ashburn with three runner nodes. [The assumptions and coverage audit](bom/oci-gitlab-cost-assumptions.json) records quantities, sources, omissions and required usage inputs.
+
+The reviewed **744-hour configured-capacity subtotal is $4,209.59 USD before free-tier credits, discounts and tax**. It includes three 1 TiB Gitaly data volumes and a conservative full-month allowance of $43.52 for a 1 TiB ephemeral backup scratch volume. Actual scratch charges depend on cumulative allocation time.
+
+This is **not a complete monthly bill**. Lines marked `UNSET` have zero quantities until supplied: database storage and performance usage, versioned objects and requests, retained Gitaly/PostgreSQL backups, load-balancer bursts and outbound transfer. They are not free services. DNS is disabled for this Dev configuration; subscriptions, external mail/observability and disaster recovery are outside the configured OCI footprint. Recalculate when changing capacity or usage assumptions. The original exporter metadata is retained; import/recalculation in the OCI Cost Estimator has not been verified.

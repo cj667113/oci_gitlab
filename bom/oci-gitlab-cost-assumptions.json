@@ -1,0 +1,193 @@
+{
+  "reviewed_on": "2026-10-01",
+  "estimate_file": "oci-gitlab-cost-estimate.json",
+  "status": "configured_capacity_complete_usage_budget_incomplete",
+  "scope": {
+    "region": "us-ashburn-1",
+    "mode": "Dev",
+    "hours_per_month": 744,
+    "runner_count": 3,
+    "terraform_sources": [
+      "terraform/main.tf",
+      "terraform/dev.tfvars"
+    ],
+    "ansible_sources": [
+      "terraform/ansible/group_vars/all.yml",
+      "terraform/ansible/templates/gitlab-values.yml.j2",
+      "terraform/ansible/templates/traefik-values.yml.j2"
+    ],
+    "currency": "USD",
+    "pricing_basis": "Public US-dollar list rates; no contract discount, tax or free-tier credit applied. Not the invoice for the short benchmark run.",
+    "export_metadata": "Original Oracle exporter metadata is retained as provenance; quantities, labels and costs were locally reviewed. Import into OCI Cost Estimator has not been tested."
+  },
+  "totals": {
+    "previous_export_monthly_usd": 3994.34,
+    "configured_capacity_subtotal_usd": 4209.59,
+    "unknown_usage_costs_usd": null,
+    "complete_monthly_estimate_usd": null,
+    "scratch_full_month_budget_included_usd": 43.52,
+    "fixed_subtotal_without_ephemeral_scratch_usd": 4166.07
+  },
+  "corrections": [
+    {
+      "component": "Gitaly data",
+      "old_gib": 300,
+      "new_gib": 3072,
+      "vpus_per_gib": 20,
+      "reason": "No gitaly_volume_gb override in dev.tfvars; main.tf defaults to 1024 GiB per replica."
+    },
+    {
+      "component": "Backup scratch",
+      "old_gib": 50,
+      "new_gib": 1024,
+      "vpus_per_gib": 10,
+      "reason": "Ansible default backup_scratch_size is 1Ti. Full-month amount is a budget, not a claim that the ephemeral PVC is continuously allocated."
+    },
+    {
+      "component": "Database and object storage",
+      "reason": "Removed arbitrary 1 GiB database and 3 GiB combined object/backup assumptions; zero-quantity lines now explicitly mean missing inputs, not free service."
+    },
+    {
+      "component": "Managed backups",
+      "reason": "Separate Gitaly gold-policy backup and PostgreSQL 30-day backup storage from GitLab application backups in the 11 buckets."
+    },
+    {
+      "component": "Credits and arithmetic",
+      "reason": "Removed implicit load-balancer free-tier deductions; all extended costs use gross quantity x rate and decimal half-up cent rounding."
+    }
+  ],
+  "coverage": [
+    {
+      "component": "OKE worker compute",
+      "status": "included",
+      "quantity": "12 nodes: web 3x8 OCPU/48 GiB; sidekiq 3x2/16; support 3x2/16; runner 3x4/16"
+    },
+    {
+      "component": "Backend and bastion compute",
+      "status": "included",
+      "quantity": "Gitaly 3x4 OCPU/32 GiB; Praefect 3x1/4; bastion 1x1/4"
+    },
+    {
+      "component": "Boot storage",
+      "status": "included",
+      "quantity": "18x100 GiB plus 50 GiB bastion = 1850 GiB, Balanced 10 VPUs/GiB; managed PostgreSQL storage is separate"
+    },
+    {
+      "component": "Gitaly data storage",
+      "status": "included",
+      "quantity": "3072 GiB at 20 VPUs/GiB"
+    },
+    {
+      "component": "PostgreSQL compute and service fee",
+      "status": "included",
+      "quantity": "Two systems, each 3x2 OCPU/32 GiB; standard E5 CPU/memory plus PostgreSQL OCPU fee are intentional, not duplicate compute"
+    },
+    {
+      "component": "PostgreSQL data storage and performance",
+      "status": "input_required",
+      "quantity": "Shared database storage and VPU usage for each system; 75K IOPS configured"
+    },
+    {
+      "component": "Redis",
+      "status": "included",
+      "quantity": "3x8 GiB low-memory nodes"
+    },
+    {
+      "component": "Enhanced OKE control plane",
+      "status": "included",
+      "quantity": "1 cluster"
+    },
+    {
+      "component": "Metrics server, cert-manager, Prometheus and benchmark pods",
+      "status": "included_in_worker_compute",
+      "quantity": "Use existing pools; no additional worker capacity or OCI service fee modeled. Prometheus persistence is disabled."
+    },
+    {
+      "component": "Load balancers",
+      "status": "minimum_included",
+      "quantity": "2 flexible LBs, 100 Mbps minimum each, 1000 Mbps maximum each; usage above minimum is extra"
+    },
+    {
+      "component": "Backup scratch PVC",
+      "status": "full_month_budget_included",
+      "quantity": "1024 GiB Balanced ephemeral volume; reduce by actual cumulative allocation hours / 744"
+    },
+    {
+      "component": "11 versioned application buckets and GitLab backups",
+      "status": "input_required",
+      "quantity": "Live objects, prior versions, retained application backups, temporary staging and incomplete multipart data; requests counted separately"
+    },
+    {
+      "component": "Gitaly gold-policy snapshots",
+      "status": "input_required",
+      "quantity": "Retained incremental/full backup storage across 3 replica volumes, including policy retention beyond one month"
+    },
+    {
+      "component": "PostgreSQL managed backups",
+      "status": "input_required",
+      "quantity": "Daily backups with 30-day retention across both systems"
+    },
+    {
+      "component": "Outbound transfer",
+      "status": "input_required",
+      "quantity": "Internet and any cross-region transfer; same-region load-generator traffic does not imply internet egress"
+    },
+    {
+      "component": "Network and identity plumbing",
+      "status": "no_separate_line_item",
+      "quantity": "VCN, subnets, route tables, NSGs, security lists, gateways, public IPs, IAM policies/groups/keys; associated transfer is modeled separately"
+    },
+    {
+      "component": "DNS",
+      "status": "disabled_for_current_dev",
+      "quantity": "domain is empty and no DNS zone configured; add query charges and domain registration if enabled"
+    },
+    {
+      "component": "External observability, alerting and email",
+      "status": "not_provisioned",
+      "quantity": "No paid OCI log ingestion, external metrics retention, SMTP service or notification integration is configured; cost separately if enabled"
+    },
+    {
+      "component": "GitLab subscription, paid images, support and disaster recovery",
+      "status": "outside_current_oci_scope",
+      "quantity": "No paid GitLab entitlement or commercial image fee configured; license/SMTP/domain/remote backups/secondary region costs need separate budgets if selected"
+    }
+  ],
+  "required_usage_inputs": {
+    "postgres_main_average_storage_gb_month": null,
+    "postgres_praefect_average_storage_gb_month": null,
+    "postgres_main_billable_vpu_gb_month": null,
+    "postgres_praefect_billable_vpu_gb_month": null,
+    "application_objects_and_versions_average_gb_month": null,
+    "object_requests_in_units_of_10000": null,
+    "gitaly_retained_backup_gb_month": null,
+    "postgres_retained_backup_gb_month": null,
+    "load_balancer_mbps_hours_above_100_per_lb": null,
+    "outbound_billable_gb_after_shared_allowance": null,
+    "scratch_cumulative_volume_hours": null,
+    "available_tenancy_free_tier_credits": null
+  },
+  "calculation_notes": [
+    "A quantity of zero on an UNSET line means no usage cost has been included; it is not a zero-usage assertion. The complete monthly estimate remains null until usage inputs are supplied.",
+    "Monthly SKU amounts are not multiplied by 744; hourly SKUs are. Request quantity is in units of 10,000 requests.",
+    "Database storage is shared across its three nodes; do not multiply storage blindly by replica count. Storage is dynamically metered.",
+    "The old export used 30 VPUs per database storage GiB for the 75K tier. Oracle billing documents confirm VPU charging, but the exact managed-service mapping was not verified here; supply billable VPU-GB usage or confirm with the estimator before finalizing.",
+    "Gitaly snapshot and PostgreSQL backup storage use standard Object Storage rates. Application backups already belong in the application bucket total; do not count them again as managed database or volume backups.",
+    "Object versions have no lifecycle expiry configured. Storage can grow even when current live object size is unchanged.",
+    "Load balancer billed bandwidth can rise to the configured 1000 Mbps maximum per LB. Full-month gross minimum is 31.69 USD; full-month 2x1000 Mbps is 165.61 USD.",
+    "Free allowances are shared/eligibility-dependent. The previous LB cost implicitly deducted one instance and 10 Mbps; this review reports gross cost to avoid assuming those credits are available.",
+    "Boot and ephemeral scratch performance is budgeted at the default Balanced 10 VPUs/GiB. Review if the CSI storage class or boot performance is changed.",
+    "19 user-managed/OKE VMs are counted, plus 6 managed PostgreSQL nodes. Additional Kubernetes pods on existing workers are not separately billed compute.",
+    "Changing runner_count, mode, shapes, repository size, replicas, storage class, backup scratch or LB limits requires updating this estimate."
+  ],
+  "sources": {
+    "usd_price_list": "https://www.oracle.com/il-en/a/ocom/docs/corporate/pricing/oracle-paas-and-iaas-global-price-list.pdf",
+    "usd_price_list_published": "2026-09-23",
+    "postgres_billing": "https://docs.oracle.com/en-us/iaas/Content/postgresql/billing.htm",
+    "postgres_pricing": "https://www.oracle.com/cloud/postgresql/pricing/",
+    "postgres_backup_billing": "https://www.oracle.com/cloud/postgresql/faq/",
+    "lb_billing": "https://docs.oracle.com/en-us/iaas/Content/Balance/Tasks/managingloadbalancer_topic-Creating_Load_Balancers.htm",
+    "volume_backups": "https://docs.oracle.com/en-us/iaas/Content/Block/Tasks/schedulingvolumebackups.htm",
+    "network_pricing": "https://www.oracle.com/cloud/networking/virtual-cloud-network/pricing/"
+  }
+}

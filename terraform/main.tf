@@ -437,6 +437,27 @@ resource "oci_containerengine_node_pool" "this" {
   }
   depends_on = [oci_core_network_security_group_security_rule.tcp, oci_core_network_security_group_security_rule.egress]
 }
+# Required for HPA resource metrics on fresh OKE clusters.
+resource "oci_containerengine_addon" "cert_manager" {
+  cluster_id                       = oci_containerengine_cluster.this.id
+  addon_name                       = "CertManager"
+  remove_addon_resources_on_delete = true
+  depends_on                       = [oci_containerengine_node_pool.this]
+}
+resource "oci_containerengine_addon" "metrics_server" {
+  cluster_id                       = oci_containerengine_cluster.this.id
+  addon_name                       = "KubernetesMetricsServer"
+  remove_addon_resources_on_delete = true
+  configurations {
+    key   = "numOfReplicas"
+    value = "2"
+  }
+  configurations {
+    key   = "nodeSelectors"
+    value = jsonencode({ "gitlab-pool" = "support" })
+  }
+  depends_on = [oci_containerengine_addon.cert_manager]
+}
 resource "oci_core_public_ip" "ingress" {
   compartment_id = var.compartment_ocid
   lifetime       = "RESERVED"

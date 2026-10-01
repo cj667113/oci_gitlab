@@ -61,6 +61,10 @@ run "ha_invariants" {
     error_message = "Node pools need failure headroom, including room for three web pods on each surviving web node."
   }
   assert {
+    condition     = oci_containerengine_addon.metrics_server.addon_name == "KubernetesMetricsServer" && oci_containerengine_addon.cert_manager.addon_name == "CertManager" && oci_containerengine_addon.metrics_server.remove_addon_resources_on_delete && oci_containerengine_addon.cert_manager.remove_addon_resources_on_delete
+    error_message = "Fresh clusters need managed resource metrics and their certificate dependency, both removed during teardown."
+  }
+  assert {
     condition     = alltrue([for b in oci_objectstorage_bucket.this : b.access_type == "NoPublicAccess" && b.versioning == "Enabled"])
     error_message = "Object storage must be private and versioned."
   }

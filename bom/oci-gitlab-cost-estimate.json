@@ -1,0 +1,917 @@
+{
+  "label": "GitLab OCI - Dev Ashburn - configured capacity subtotal; usage inputs UNSET; before free-tier credits",
+  "timeFrame": {
+    "months": 1,
+    "from": null,
+    "to": null,
+    "leapYear": [],
+    "calculation": "simple"
+  },
+  "currency": "USD",
+  "meta": {
+    "exportVersion": 1,
+    "dataBuildID": {
+      "buildDate": "2026-10-01T13:01:58Z",
+      "buildNumber": "493",
+      "instance": "CCE-PUBLIC-PROD",
+      "realm": "public",
+      "serviceType": "paas"
+    },
+    "hash": "e7038509b760fcd7e229e6e84df55693"
+  },
+  "configs": [
+    {
+      "label": "01 OKE web: 3 E5 workers x 8 OCPU / 48 GiB (aggregate SKUs)",
+      "services": [
+        {
+          "id": 822,
+          "label": "Compute - Virtual Machine",
+          "utilization": {
+            "instances": 1,
+            "hours": 24,
+            "days": 31,
+            "hoursPerMonth": 744,
+            "foreignInstanceMultiplier": {
+              "value": 1,
+              "description": ""
+            },
+            "localInstanceMultiplier": {
+              "value": 1,
+              "description": ""
+            }
+          },
+          "items": [
+            {
+              "sku": "B97384",
+              "quantity": 24,
+              "minQuantity": 0,
+              "unitPrice": 0.03,
+              "monthlyCost": 535.68
+            },
+            {
+              "sku": "B97385",
+              "quantity": 144,
+              "minQuantity": 0,
+              "unitPrice": 0.002,
+              "monthlyCost": 214.27
+            }
+          ],
+          "uiState": {},
+          "isFromShape": false
+        }
+      ],
+      "addBySearch": true
+    },
+    {
+      "label": "02 OKE Sidekiq: 3 E5 workers x 2 OCPU / 16 GiB (aggregate SKUs)",
+      "services": [
+        {
+          "id": 822,
+          "label": "Compute - Virtual Machine",
+          "utilization": {
+            "instances": 1,
+            "hours": 24,
+            "days": 31,
+            "hoursPerMonth": 744,
+            "foreignInstanceMultiplier": {
+              "value": 1,
+              "description": ""
+            },
+            "localInstanceMultiplier": {
+              "value": 1,
+              "description": ""
+            }
+          },
+          "items": [
+            {
+              "sku": "B97384",
+              "quantity": 6,
+              "minQuantity": 0,
+              "unitPrice": 0.03,
+              "monthlyCost": 133.92
+            },
+            {
+              "sku": "B97385",
+              "quantity": 48,
+              "minQuantity": 0,
+              "unitPrice": 0.002,
+              "monthlyCost": 71.42
+            }
+          ],
+          "uiState": {},
+          "isFromShape": false
+        }
+      ],
+      "addBySearch": true
+    },
+    {
+      "label": "03 OKE support: 3 E5 workers x 2 OCPU / 16 GiB (aggregate SKUs)",
+      "services": [
+        {
+          "id": 822,
+          "label": "Compute - Virtual Machine",
+          "utilization": {
+            "instances": 1,
+            "hours": 24,
+            "days": 31,
+            "hoursPerMonth": 744,
+            "foreignInstanceMultiplier": {
+              "value": 1,
+              "description": ""
+            },
+            "localInstanceMultiplier": {
+              "value": 1,
+              "description": ""
+            }
+          },
+          "items": [
+            {
+              "sku": "B97384",
+              "quantity": 6,
+              "minQuantity": 0,
+              "unitPrice": 0.03,
+              "monthlyCost": 133.92
+            },
+            {
+              "sku": "B97385",
+              "quantity": 48,
+              "minQuantity": 0,
+              "unitPrice": 0.002,
+              "monthlyCost": 71.42
+            }
+          ],
+          "uiState": {},
+          "isFromShape": false
+        }
+      ],
+      "addBySearch": true
+    },
+    {
+      "label": "04 GitLab CI runners: 3 E5 workers x 4 OCPU / 16 GiB (aggregate SKUs)",
+      "services": [
+        {
+          "id": 822,
+          "label": "Compute - Virtual Machine",
+          "utilization": {
+            "instances": 1,
+            "hours": 24,
+            "days": 31,
+            "hoursPerMonth": 744,
+            "foreignInstanceMultiplier": {
+              "value": 1,
+              "description": ""
+            },
+            "localInstanceMultiplier": {
+              "value": 1,
+              "description": ""
+            }
+          },
+          "items": [
+            {
+              "sku": "B97384",
+              "quantity": 12,
+              "minQuantity": 0,
+              "unitPrice": 0.03,
+              "monthlyCost": 267.84
+            },
+            {
+              "sku": "B97385",
+              "quantity": 48,
+              "minQuantity": 0,
+              "unitPrice": 0.002,
+              "monthlyCost": 71.42
+            }
+          ],
+          "uiState": {},
+          "isFromShape": false
+        }
+      ],
+      "addBySearch": true
+    },
+    {
+      "label": "05 Praefect: 3 E5 VMs x 1 OCPU / 4 GiB (aggregate SKUs)",
+      "services": [
+        {
+          "id": 822,
+          "label": "Compute - Virtual Machine",
+          "utilization": {
+            "instances": 1,
+            "hours": 24,
+            "days": 31,
+            "hoursPerMonth": 744,
+            "foreignInstanceMultiplier": {
+              "value": 1,
+              "description": ""
+            },
+            "localInstanceMultiplier": {
+              "value": 1,
+              "description": ""
+            }
+          },
+          "items": [
+            {
+              "sku": "B97384",
+              "quantity": 3,
+              "minQuantity": 0,
+              "unitPrice": 0.03,
+              "monthlyCost": 66.96
+            },
+            {
+              "sku": "B97385",
+              "quantity": 12,
+              "minQuantity": 0,
+              "unitPrice": 0.002,
+              "monthlyCost": 17.86
+            }
+          ],
+          "uiState": {},
+          "isFromShape": false
+        }
+      ],
+      "addBySearch": true
+    },
+    {
+      "label": "06 Gitaly: 3 E5 VMs x 4 OCPU / 32 GiB (aggregate SKUs)",
+      "services": [
+        {
+          "id": 822,
+          "label": "Compute - Virtual Machine",
+          "utilization": {
+            "instances": 1,
+            "hours": 24,
+            "days": 31,
+            "hoursPerMonth": 744,
+            "foreignInstanceMultiplier": {
+              "value": 1,
+              "description": ""
+            },
+            "localInstanceMultiplier": {
+              "value": 1,
+              "description": ""
+            }
+          },
+          "items": [
+            {
+              "sku": "B97384",
+              "quantity": 12,
+              "minQuantity": 0,
+              "unitPrice": 0.03,
+              "monthlyCost": 267.84
+            },
+            {
+              "sku": "B97385",
+              "quantity": 96,
+              "minQuantity": 0,
+              "unitPrice": 0.002,
+              "monthlyCost": 142.85
+            }
+          ],
+          "uiState": {},
+          "isFromShape": false
+        }
+      ],
+      "addBySearch": true
+    },
+    {
+      "label": "07 Dev bastion: 1 E5 VM x 1 OCPU / 4 GiB",
+      "services": [
+        {
+          "id": 822,
+          "label": "Compute - Virtual Machine",
+          "utilization": {
+            "instances": 1,
+            "hours": 24,
+            "days": 31,
+            "hoursPerMonth": 744,
+            "foreignInstanceMultiplier": {
+              "value": 1,
+              "description": ""
+            },
+            "localInstanceMultiplier": {
+              "value": 1,
+              "description": ""
+            }
+          },
+          "items": [
+            {
+              "sku": "B97384",
+              "quantity": 1,
+              "minQuantity": 0,
+              "unitPrice": 0.03,
+              "monthlyCost": 22.32
+            },
+            {
+              "sku": "B97385",
+              "quantity": 4,
+              "minQuantity": 0,
+              "unitPrice": 0.002,
+              "monthlyCost": 5.95
+            }
+          ],
+          "uiState": {},
+          "isFromShape": false
+        }
+      ],
+      "addBySearch": true
+    },
+    {
+      "label": "08 OKE: 1 enhanced cluster; all worker compute is itemized above",
+      "services": [
+        {
+          "id": 2301,
+          "label": "Cloud Infrastructure Kubernetes Engine (OKE)",
+          "utilization": {
+            "instances": 1,
+            "hours": 24,
+            "days": 31,
+            "hoursPerMonth": 744,
+            "foreignInstanceMultiplier": {
+              "value": 1,
+              "description": ""
+            },
+            "localInstanceMultiplier": {
+              "value": 1,
+              "description": ""
+            }
+          },
+          "items": [
+            {
+              "sku": "B96545",
+              "quantity": 1,
+              "minQuantity": 0,
+              "unitPrice": 0.1,
+              "monthlyCost": 74.4
+            }
+          ],
+          "uiState": {},
+          "isFromShape": false
+        }
+      ],
+      "addBySearch": true
+    },
+    {
+      "label": "09 Boot disks: 18 x 100 GiB + bastion 50 GiB = 1850 GiB; Balanced 10 VPUs",
+      "services": [
+        {
+          "id": 881,
+          "label": "Storage - Block Volumes",
+          "utilization": {
+            "instances": 1,
+            "hours": 24,
+            "days": 31,
+            "hoursPerMonth": 744,
+            "foreignInstanceMultiplier": {
+              "value": 1,
+              "description": ""
+            },
+            "localInstanceMultiplier": {
+              "value": 1,
+              "description": ""
+            }
+          },
+          "items": [
+            {
+              "sku": "B91961",
+              "quantity": 1850,
+              "minQuantity": 0,
+              "unitPrice": 0.0255,
+              "monthlyCost": 47.18
+            },
+            {
+              "sku": "B91962",
+              "quantity": 18500,
+              "minQuantity": 0,
+              "unitPrice": 0.0017,
+              "monthlyCost": 31.45
+            }
+          ],
+          "uiState": {},
+          "isFromShape": false
+        }
+      ],
+      "addBySearch": true
+    },
+    {
+      "label": "10 Gitaly data: 3 x 1024 GiB = 3072 GiB physical; 20 VPUs; 1024 GiB logical",
+      "services": [
+        {
+          "id": 881,
+          "label": "Storage - Block Volumes",
+          "utilization": {
+            "instances": 1,
+            "hours": 24,
+            "days": 31,
+            "hoursPerMonth": 744,
+            "foreignInstanceMultiplier": {
+              "value": 1,
+              "description": ""
+            },
+            "localInstanceMultiplier": {
+              "value": 1,
+              "description": ""
+            }
+          },
+          "items": [
+            {
+              "sku": "B91961",
+              "quantity": 3072,
+              "minQuantity": 0,
+              "unitPrice": 0.0255,
+              "monthlyCost": 78.34
+            },
+            {
+              "sku": "B91962",
+              "quantity": 61440,
+              "minQuantity": 0,
+              "unitPrice": 0.0017,
+              "monthlyCost": 104.45
+            }
+          ],
+          "uiState": {},
+          "isFromShape": false
+        }
+      ],
+      "addBySearch": true
+    },
+    {
+      "label": "11 PostgreSQL main: 3 E5 nodes x 2 OCPU / 32 GiB; storage and VPU usage UNSET (0 excludes cost); 75K IOPS",
+      "services": [
+        {
+          "id": 822,
+          "label": "Compute - Virtual Machine",
+          "utilization": {
+            "instances": 1,
+            "hours": 24,
+            "days": 31,
+            "hoursPerMonth": 744,
+            "foreignInstanceMultiplier": {
+              "value": 1,
+              "description": ""
+            },
+            "localInstanceMultiplier": {
+              "value": 1,
+              "description": ""
+            }
+          },
+          "items": [
+            {
+              "sku": "B97384",
+              "quantity": 6,
+              "minQuantity": 0,
+              "unitPrice": 0.03,
+              "monthlyCost": 133.92
+            },
+            {
+              "sku": "B97385",
+              "quantity": 96,
+              "minQuantity": 0,
+              "unitPrice": 0.002,
+              "monthlyCost": 142.85
+            }
+          ],
+          "uiState": {},
+          "isFromShape": false
+        },
+        {
+          "id": 2621,
+          "label": "Database with PostgreSQL",
+          "utilization": {
+            "instances": 1,
+            "hours": 24,
+            "days": 31,
+            "hoursPerMonth": 744,
+            "foreignInstanceMultiplier": {
+              "value": 1,
+              "description": ""
+            },
+            "localInstanceMultiplier": {
+              "value": 1,
+              "description": ""
+            }
+          },
+          "items": [
+            {
+              "sku": "B99060",
+              "quantity": 6,
+              "minQuantity": 0,
+              "unitPrice": 0.098,
+              "monthlyCost": 437.47
+            },
+            {
+              "sku": "B99062",
+              "quantity": 0,
+              "minQuantity": 0,
+              "unitPrice": 0.072,
+              "monthlyCost": 0.0
+            }
+          ],
+          "uiState": {},
+          "isFromShape": false
+        },
+        {
+          "id": 881,
+          "label": "Storage - Block Volumes",
+          "utilization": {
+            "instances": 1,
+            "hours": 24,
+            "days": 31,
+            "hoursPerMonth": 744,
+            "foreignInstanceMultiplier": {
+              "value": 1,
+              "description": ""
+            },
+            "localInstanceMultiplier": {
+              "value": 1,
+              "description": ""
+            }
+          },
+          "items": [
+            {
+              "sku": "B91962",
+              "quantity": 0,
+              "minQuantity": 0,
+              "unitPrice": 0.0017,
+              "monthlyCost": 0.0
+            }
+          ],
+          "uiState": {},
+          "isFromShape": false
+        }
+      ],
+      "addBySearch": true
+    },
+    {
+      "label": "12 PostgreSQL praefect: 3 E5 nodes x 2 OCPU / 32 GiB; storage and VPU usage UNSET (0 excludes cost); 75K IOPS",
+      "services": [
+        {
+          "id": 822,
+          "label": "Compute - Virtual Machine",
+          "utilization": {
+            "instances": 1,
+            "hours": 24,
+            "days": 31,
+            "hoursPerMonth": 744,
+            "foreignInstanceMultiplier": {
+              "value": 1,
+              "description": ""
+            },
+            "localInstanceMultiplier": {
+              "value": 1,
+              "description": ""
+            }
+          },
+          "items": [
+            {
+              "sku": "B97384",
+              "quantity": 6,
+              "minQuantity": 0,
+              "unitPrice": 0.03,
+              "monthlyCost": 133.92
+            },
+            {
+              "sku": "B97385",
+              "quantity": 96,
+              "minQuantity": 0,
+              "unitPrice": 0.002,
+              "monthlyCost": 142.85
+            }
+          ],
+          "uiState": {},
+          "isFromShape": false
+        },
+        {
+          "id": 2621,
+          "label": "Database with PostgreSQL",
+          "utilization": {
+            "instances": 1,
+            "hours": 24,
+            "days": 31,
+            "hoursPerMonth": 744,
+            "foreignInstanceMultiplier": {
+              "value": 1,
+              "description": ""
+            },
+            "localInstanceMultiplier": {
+              "value": 1,
+              "description": ""
+            }
+          },
+          "items": [
+            {
+              "sku": "B99060",
+              "quantity": 6,
+              "minQuantity": 0,
+              "unitPrice": 0.098,
+              "monthlyCost": 437.47
+            },
+            {
+              "sku": "B99062",
+              "quantity": 0,
+              "minQuantity": 0,
+              "unitPrice": 0.072,
+              "monthlyCost": 0.0
+            }
+          ],
+          "uiState": {},
+          "isFromShape": false
+        },
+        {
+          "id": 881,
+          "label": "Storage - Block Volumes",
+          "utilization": {
+            "instances": 1,
+            "hours": 24,
+            "days": 31,
+            "hoursPerMonth": 744,
+            "foreignInstanceMultiplier": {
+              "value": 1,
+              "description": ""
+            },
+            "localInstanceMultiplier": {
+              "value": 1,
+              "description": ""
+            }
+          },
+          "items": [
+            {
+              "sku": "B91962",
+              "quantity": 0,
+              "minQuantity": 0,
+              "unitPrice": 0.0017,
+              "monthlyCost": 0.0
+            }
+          ],
+          "uiState": {},
+          "isFromShape": false
+        }
+      ],
+      "addBySearch": true
+    },
+    {
+      "label": "13 OCI Cache: 3 Redis nodes x 8 GiB = 24 GiB total, low-memory tier",
+      "services": [
+        {
+          "id": 2601,
+          "label": "Cache with Redis",
+          "utilization": {
+            "instances": 1,
+            "hours": 24,
+            "days": 31,
+            "hoursPerMonth": 744,
+            "foreignInstanceMultiplier": {
+              "value": 1,
+              "description": ""
+            },
+            "localInstanceMultiplier": {
+              "value": 1,
+              "description": ""
+            }
+          },
+          "items": [
+            {
+              "sku": "B98217",
+              "quantity": 24,
+              "minQuantity": 0,
+              "unitPrice": 0.0194,
+              "monthlyCost": 346.41
+            }
+          ],
+          "uiState": {},
+          "isFromShape": false
+        }
+      ],
+      "addBySearch": true
+    },
+    {
+      "label": "14 Load balancers: public Traefik + private Praefect; 2 x 100 Mbps minimum; gross cost before credits; bursts extra",
+      "services": [
+        {
+          "id": 885,
+          "label": "Networking - Load Balancer",
+          "utilization": {
+            "instances": 1,
+            "hours": 24,
+            "days": 31,
+            "hoursPerMonth": 744,
+            "foreignInstanceMultiplier": {
+              "value": 1,
+              "description": ""
+            },
+            "localInstanceMultiplier": {
+              "value": 1,
+              "description": ""
+            }
+          },
+          "items": [
+            {
+              "sku": "B93030",
+              "quantity": 2,
+              "minQuantity": 0,
+              "unitPrice": 0.0113,
+              "monthlyCost": 16.81
+            },
+            {
+              "sku": "B93031",
+              "quantity": 200,
+              "minQuantity": 0,
+              "unitPrice": 0.0001,
+              "monthlyCost": 14.88
+            }
+          ],
+          "uiState": {},
+          "isFromShape": false
+        }
+      ],
+      "addBySearch": true
+    },
+    {
+      "label": "15 Backup scratch: 1024 GiB / 10 VPUs; full-month reservation budget; actual ephemeral lifetime may be shorter",
+      "services": [
+        {
+          "id": 881,
+          "label": "Storage - Block Volumes",
+          "utilization": {
+            "instances": 1,
+            "hours": 24,
+            "days": 31,
+            "hoursPerMonth": 744,
+            "foreignInstanceMultiplier": {
+              "value": 1,
+              "description": ""
+            },
+            "localInstanceMultiplier": {
+              "value": 1,
+              "description": ""
+            }
+          },
+          "items": [
+            {
+              "sku": "B91961",
+              "quantity": 1024,
+              "minQuantity": 0,
+              "unitPrice": 0.0255,
+              "monthlyCost": 26.11
+            },
+            {
+              "sku": "B91962",
+              "quantity": 10240,
+              "minQuantity": 0,
+              "unitPrice": 0.0017,
+              "monthlyCost": 17.41
+            }
+          ],
+          "uiState": {},
+          "isFromShape": false
+        }
+      ],
+      "addBySearch": true
+    },
+    {
+      "label": "16 Versioned objects across 11 buckets incl. GitLab application backups; retained GB-month and request units UNSET (0 excludes cost)",
+      "services": [
+        {
+          "id": 882,
+          "label": "Storage - Object Storage",
+          "utilization": {
+            "instances": 1,
+            "hours": 24,
+            "days": 31,
+            "hoursPerMonth": 744,
+            "foreignInstanceMultiplier": {
+              "value": 1,
+              "description": ""
+            },
+            "localInstanceMultiplier": {
+              "value": 1,
+              "description": ""
+            }
+          },
+          "items": [
+            {
+              "sku": "B91628",
+              "quantity": 0,
+              "minQuantity": 0,
+              "unitPrice": 0.0255,
+              "monthlyCost": 0.0
+            },
+            {
+              "sku": "B91627",
+              "quantity": 0,
+              "minQuantity": 0,
+              "unitPrice": 0.0034,
+              "monthlyCost": 0.0
+            }
+          ],
+          "uiState": {},
+          "isFromShape": false
+        }
+      ],
+      "addBySearch": true
+    },
+    {
+      "label": "17 Outbound transfer from Ashburn: billable GB UNSET (0 excludes cost); account allowance and traffic must be supplied",
+      "services": [
+        {
+          "id": 884,
+          "label": "Networking - Virtual Cloud Networks",
+          "utilization": {
+            "instances": 1,
+            "hours": 24,
+            "days": 31,
+            "hoursPerMonth": 744,
+            "foreignInstanceMultiplier": {
+              "value": 1,
+              "description": ""
+            },
+            "localInstanceMultiplier": {
+              "value": 1,
+              "description": ""
+            }
+          },
+          "items": [
+            {
+              "sku": "B88327",
+              "quantity": 0,
+              "minQuantity": 0,
+              "unitPrice": 0.0085,
+              "monthlyCost": 0.0
+            }
+          ],
+          "uiState": {},
+          "isFromShape": false
+        }
+      ],
+      "addBySearch": true
+    },
+    {
+      "label": "18 Gitaly gold-policy block-volume backups: total retained billable GB-month across all 3 volumes UNSET (0 excludes cost)",
+      "services": [
+        {
+          "id": 882,
+          "label": "Storage - Object Storage",
+          "utilization": {
+            "instances": 1,
+            "hours": 24,
+            "days": 31,
+            "hoursPerMonth": 744,
+            "foreignInstanceMultiplier": {
+              "value": 1,
+              "description": ""
+            },
+            "localInstanceMultiplier": {
+              "value": 1,
+              "description": ""
+            }
+          },
+          "items": [
+            {
+              "sku": "B91628",
+              "quantity": 0,
+              "minQuantity": 0,
+              "unitPrice": 0.0255,
+              "monthlyCost": 0.0
+            }
+          ],
+          "uiState": {},
+          "isFromShape": false
+        }
+      ],
+      "addBySearch": true
+    },
+    {
+      "label": "19 PostgreSQL managed backups: total retained billable GB-month across both systems, daily/30-day retention UNSET (0 excludes cost)",
+      "services": [
+        {
+          "id": 882,
+          "label": "Storage - Object Storage",
+          "utilization": {
+            "instances": 1,
+            "hours": 24,
+            "days": 31,
+            "hoursPerMonth": 744,
+            "foreignInstanceMultiplier": {
+              "value": 1,
+              "description": ""
+            },
+            "localInstanceMultiplier": {
+              "value": 1,
+              "description": ""
+            }
+          },
+          "items": [
+            {
+              "sku": "B91628",
+              "quantity": 0,
+              "minQuantity": 0,
+              "unitPrice": 0.0255,
+              "monthlyCost": 0.0
+            }
+          ],
+          "uiState": {},
+          "isFromShape": false
+        }
+      ],
+      "addBySearch": true
+    }
+  ]
+}
