@@ -1,0 +1,90 @@
+# Separate, current Traefik v3 chart; GitLab's legacy bundled Traefik is disabled.
+deployment:
+  replicas: {{ service_replicas }}
+podDisruptionBudget:
+  enabled: true
+  maxUnavailable: 1
+nodeSelector:
+  gitlab-pool: support
+affinity:
+  podAntiAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      - labelSelector:
+          matchLabels:
+            app.kubernetes.io/name: traefik
+        topologyKey: kubernetes.io/hostname
+resources:
+  requests: {cpu: 200m, memory: 256Mi}
+  limits: {memory: 1Gi}
+providers:
+  kubernetesIngress:
+    enabled: true
+    ingressClass: traefik
+  kubernetesCRD:
+    enabled: true
+    allowCrossNamespace: false
+ingressClass:
+  enabled: true
+  isDefaultClass: false
+  name: traefik
+ports:
+  web:
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+  websecure:
+    port: 8443
+    exposedPort: 443
+    http:
+      tls:
+        enabled: true
+      # GitLab project paths can contain escaped slashes.
+      encodedCharacters:
+        allowEncodedSlash: true
+        allowEncodedPercent: true
+    transport:
+      respondingTimeouts:
+        readTimeout: 3600s
+        writeTimeout: 3600s
+        idleTimeout: 3600s
+{% if ip_access %}
+  registry:
+    port: 5050
+    exposedPort: 5050
+    expose: {default: true}
+    http:
+      tls: {enabled: true}
+    transport:
+      respondingTimeouts:
+        readTimeout: 3600s
+        writeTimeout: 3600s
+  kas:
+    port: 8150
+    exposedPort: 8150
+    expose: {default: true}
+    http:
+      tls: {enabled: true}
+{% endif %}
+  gitlab-shell:
+    port: 2222
+    exposedPort: 22
+    expose:
+      default: true
+service:
+  type: LoadBalancer
+  spec:
+    loadBalancerIP: {{ public_ip }}
+    externalTrafficPolicy: Cluster
+    loadBalancerSourceRanges: {{ client_cidrs | to_json }}
+  annotations:
+    oci.oraclecloud.com/load-balancer-type: lb
+    service.beta.kubernetes.io/oci-load-balancer-shape: flexible
+    service.beta.kubernetes.io/oci-load-balancer-shape-flex-min: '100'
+    service.beta.kubernetes.io/oci-load-balancer-shape-flex-max: '1000'
+    service.beta.kubernetes.io/oci-load-balancer-subnet1: {{ public_subnet_id }}
+    oci.oraclecloud.com/oci-network-security-groups: {{ public_nsg_id }}
+    oci.oraclecloud.com/security-rule-management-mode: None
+    service.beta.kubernetes.io/oci-load-balancer-connection-idle-timeout: '3600'

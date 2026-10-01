@@ -1,0 +1,282 @@
+---
+- name: Benchmark GitLab with the official GitLab Performance Tool on OKE
+  hosts: controller
+  gather_facts: false
+  vars:
+    loadtest_namespace: gitlab-loadtest
+    benchmark_image: 'docker.io/gitlab/gitlab-performance-tool:2.17.0@sha256:85e6492ff7df86e41508ba630a968ef3285b5610674a6af1d4efccafb7ae3d17'
+    benchmark_options: 60s_40rps.json
+    benchmark_tests: tests
+    benchmark_full_suite: false
+    benchmark_root_group: gpt-benchmark
+    benchmark_generator_pool_size: 4
+    loadtest_output_dir: '{{ environment_identity_dir }}/benchmark'
+  environment:
+    OCI_CLI_PROFILE: '{{ oci_profile }}'
+    OCI_CLI_CONFIG_FILE: '{{ oci_config_file }}'
+  tasks:
+    - name: Assign a unique run name
+      ansible.builtin.set_fact:
+        benchmark_run: 'benchmark-{{ now(utc=true, fmt="%Y%m%d%H%M%S") }}'
+    - name: Create persistent results directory
+      ansible.builtin.file:
+        path: '{{ loadtest_output_dir }}/{{ benchmark_run }}'
+        state: directory
+        mode: '0700'
+    - name: Find Toolbox for short lived administrator token
+      kubernetes.core.k8s_info:
+        kubeconfig: '{{ kubeconfig_path }}'
+        kind: Pod
+        namespace: '{{ gitlab_namespace }}'
+        label_selectors: [app=toolbox, release=gitlab]
+        field_selectors: [status.phase=Running]
+      register: toolbox
+    - name: Require a running Toolbox
+      ansible.builtin.assert:
+        that: toolbox.resources | length > 0
+    - name: Generate benchmark credential
+      ansible.builtin.set_fact:
+        benchmark_pat: '{{ lookup("password", "/dev/null length=48 chars=ascii_letters,digits") }}'
+      no_log: true
+    - name: Run benchmark and always restore settings and revoke its credential
+      block:
+        - name: Create expiring administrator API token
+          kubernetes.core.k8s_exec:
+            kubeconfig: '{{ kubeconfig_path }}'
+            namespace: '{{ gitlab_namespace }}'
+            pod: '{{ toolbox.resources[0].metadata.name }}'
+            container: toolbox
+            command: >-
+              gitlab-rails runner
+              't = User.find_by_username("root").personal_access_tokens.create!(scopes: ["api"], name: "{{ benchmark_run }}", expires_at: Date.today + 2); t.set_token("{{ benchmark_pat }}"); t.save!'
+          no_log: true
+        - name: Snapshot application settings before GitLab Performance Tool changes
+          ansible.builtin.uri:
+            url: 'https://{{ gitlab_host }}/api/v4/application/settings'
+            headers: {PRIVATE-TOKEN: '{{ benchmark_pat }}'}
+            ca_path: '{{ public_tls_certificate_file if ip_access else omit }}'
+          register: benchmark_settings
+          no_log: true
+        - name: Save recovery settings locally
+          ansible.builtin.copy:
+            content: '{{ benchmark_settings.json | to_nice_json }}'
+            dest: '{{ loadtest_output_dir }}/{{ benchmark_run }}/application-settings-before.json'
+            mode: '0600'
+          no_log: true
+        - name: Create benchmark namespace
+          kubernetes.core.k8s:
+            kubeconfig: '{{ kubeconfig_path }}'
+            definition:
+              apiVersion: v1
+              kind: Namespace
+              metadata: {name: '{{ loadtest_namespace }}'}
+        - name: Store temporary benchmark credential
+          kubernetes.core.k8s:
+            kubeconfig: '{{ kubeconfig_path }}'
+            definition:
+              apiVersion: v1
+              kind: Secret
+              metadata: {name: '{{ benchmark_run }}', namespace: '{{ loadtest_namespace }}'}
+              stringData: {ACCESS_TOKEN: '{{ benchmark_pat }}'}
+          no_log: true
+        - name: Install benchmark wrapper and public CA
+          kubernetes.core.k8s:
+            kubeconfig: '{{ kubeconfig_path }}'
+            definition:
+              apiVersion: v1
+              kind: ConfigMap
+              metadata: {name: '{{ benchmark_run }}', namespace: '{{ loadtest_namespace }}'}
+              data:
+                run-benchmark.rb: '{{ lookup("file", "../loadtest/run-benchmark.rb") }}'
+                ca.crt: '{{ lookup("file", public_tls_certificate_file) }}'
+        - name: Start the official GitLab Performance Tool data generator and selected test suite
+          kubernetes.core.k8s:
+            kubeconfig: '{{ kubeconfig_path }}'
+            definition:
+              apiVersion: batch/v1
+              kind: Job
+              metadata: {name: '{{ benchmark_run }}', namespace: '{{ loadtest_namespace }}'}
+              spec:
+                backoffLimit: 0
+                activeDeadlineSeconds: 28800
+                template:
+                  spec:
+                    restartPolicy: Never
+                    nodeSelector: {gitlab-pool: runner}
+                    containers:
+                      - name: gpt
+                        image: '{{ benchmark_image }}'
+                        command: [ruby, /scripts/run-benchmark.rb]
+                        resources:
+                          requests: {cpu: '3', memory: 8Gi, ephemeral-storage: 20Gi}
+                          limits: {cpu: '3', memory: 12Gi, ephemeral-storage: 50Gi}
+                        envFrom: [{secretRef: {name: '{{ benchmark_run }}'}}]
+                        env:
+                          - {name: TARGET_URL, value: 'https://{{ gitlab_host }}'}
+                          - {name: SSL_CERT_FILE, value: /scripts/ca.crt}
+                          - {name: GPT_IMAGE, value: '{{ benchmark_image }}'}
+                          - {name: GPT_OPTIONS, value: '{{ benchmark_options }}'}
+                          - {name: GPT_TESTS, value: '{{ benchmark_tests }}'}
+                          - {name: GPT_FULL_SUITE, value: '{{ benchmark_full_suite | bool | lower }}'}
+                          - {name: GPT_ROOT_GROUP, value: '{{ benchmark_root_group }}'}
+                          - {name: GPT_GENERATOR_POOL_SIZE, value: '{{ benchmark_generator_pool_size | string }}'}
+                          - {name: GPT_WAIT_FOR_COLLECTION, value: 'true'}
+                        volumeMounts:
+                          - {name: scripts, mountPath: /scripts, readOnly: true}
+                          - {name: results, mountPath: /results}
+                    volumes:
+                      - name: scripts
+                        configMap: {name: '{{ benchmark_run }}'}
+                      - name: results
+                        emptyDir: {sizeLimit: 20Gi}
+        - name: Wait for the benchmark pod to start
+          kubernetes.core.k8s_info:
+            kubeconfig: '{{ kubeconfig_path }}'
+            kind: Pod
+            namespace: '{{ loadtest_namespace }}'
+            label_selectors: ['job-name={{ benchmark_run }}']
+          register: benchmark_pods
+          until: benchmark_pods.resources | length > 0 and benchmark_pods.resources[0].status.phase == 'Running'
+          retries: 60
+          delay: 10
+        - name: Wait for data generation and GitLab Performance Tool results (up to seven hours)
+          kubernetes.core.k8s_exec:
+            kubeconfig: '{{ kubeconfig_path }}'
+            namespace: '{{ loadtest_namespace }}'
+            pod: '{{ benchmark_pods.resources[0].metadata.name }}'
+            container: gpt
+            command: test -f /results/exit-code
+          register: benchmark_finished
+          failed_when: false
+          changed_when: false
+          until: benchmark_finished.rc | default(1) == 0
+          retries: 840
+          delay: 30
+        - name: Collect native reports and generation logs
+          kubernetes.core.k8s_exec:
+            kubeconfig: '{{ kubeconfig_path }}'
+            namespace: '{{ loadtest_namespace }}'
+            pod: '{{ benchmark_pods.resources[0].metadata.name }}'
+            container: gpt
+            command: sh -c 'tar -czf /tmp/benchmark-results.tgz -C /results . && base64 /tmp/benchmark-results.tgz'
+          register: benchmark_archive
+          no_log: true
+        - name: Save archive as base64 for lossless decoding
+          ansible.builtin.copy:
+            content: '{{ benchmark_archive.stdout }}'
+            dest: '{{ loadtest_output_dir }}/{{ benchmark_run }}/results.tgz.b64'
+            mode: '0600'
+          no_log: true
+        - name: Extract native reports safely
+          ansible.builtin.command:
+            argv:
+              - '{{ ansible_playbook_python }}'
+              - -c
+              - >-
+                import base64,io,pathlib,sys,tarfile;
+                p=pathlib.Path(sys.argv[1]);
+                a=p/'results.tgz.b64';
+                tarfile.open(fileobj=io.BytesIO(base64.b64decode(a.read_bytes()))).extractall(p,filter='data');
+                a.unlink()
+              - '{{ loadtest_output_dir }}/{{ benchmark_run }}'
+          changed_when: true
+        - name: Release the results collection hold
+          kubernetes.core.k8s_exec:
+            kubeconfig: '{{ kubeconfig_path }}'
+            namespace: '{{ loadtest_namespace }}'
+            pod: '{{ benchmark_pods.resources[0].metadata.name }}'
+            container: gpt
+            command: touch /results/collected
+        - name: Render endpoint PNG and SVG charts and enforce upstream results
+          ansible.builtin.command:
+            argv:
+              - '{{ ansible_playbook_python }}'
+              - '{{ playbook_dir }}/../loadtest/report.py'
+              - '{{ loadtest_output_dir }}/{{ benchmark_run }}'
+              - '{{ loadtest_output_dir }}/{{ benchmark_run }}/charts'
+          changed_when: true
+        - name: Require successful generation and execution
+          ansible.builtin.assert:
+            that: lookup('file', loadtest_output_dir ~ '/' ~ benchmark_run ~ '/exit-code') | trim == '0'
+            fail_msg: 'GitLab Performance Tool execution failed; inspect generator.log, benchmark.log and recovery settings.'
+      rescue:
+        - name: Preserve pod logs if artifact collection was interrupted
+          kubernetes.core.k8s_log:
+            kubeconfig: '{{ kubeconfig_path }}'
+            namespace: '{{ loadtest_namespace }}'
+            name: '{{ benchmark_pods.resources[0].metadata.name }}'
+            container: gpt
+          register: benchmark_failure_log
+          when: benchmark_pods.resources | default([]) | length > 0
+          failed_when: false
+          no_log: true
+        - name: Save failure diagnostics without the credential
+          ansible.builtin.copy:
+            content: '{{ benchmark_failure_log.log | default("Pod log unavailable") | replace(benchmark_pat, "[REDACTED]") }}'
+            dest: '{{ loadtest_output_dir }}/{{ benchmark_run }}/pod.log'
+            mode: '0600'
+          no_log: true
+        - name: Report benchmark failure
+          ansible.builtin.fail:
+            msg: 'GitLab Performance Tool failed. Available reports are in {{ loadtest_output_dir }}/{{ benchmark_run }}.'
+      always:
+        - name: Stop workload and restore settings
+          block:
+            - name: Stop benchmark processes before restoring global settings
+              kubernetes.core.k8s:
+                kubeconfig: '{{ kubeconfig_path }}'
+                api_version: batch/v1
+                kind: Job
+                name: '{{ benchmark_run }}'
+                namespace: '{{ loadtest_namespace }}'
+                state: absent
+                delete_options: {propagationPolicy: Foreground}
+                wait: true
+                wait_timeout: 120
+            - name: Read settings after stopping the workload
+              ansible.builtin.uri:
+                url: 'https://{{ gitlab_host }}/api/v4/application/settings'
+                headers: {PRIVATE-TOKEN: '{{ benchmark_pat }}'}
+                ca_path: '{{ public_tls_certificate_file if ip_access else omit }}'
+              register: benchmark_current_settings
+              when: benchmark_settings.json is defined
+              no_log: true
+            - name: Initialize settings recovery payload
+              ansible.builtin.set_fact:
+                benchmark_restore_settings: {}
+            - name: Select changed benchmark settings for recovery
+              ansible.builtin.set_fact:
+                benchmark_restore_settings: '{{ benchmark_restore_settings | combine({item.key: item.value}) }}'
+              loop: '{{ benchmark_settings.json | default({}) | dict2items }}'
+              when:
+                - item.key is search('(?i)limit|^import_sources$|^max_import_size$|^repository_storages|^delayed_.*deletion$|^deletion_adjourned_period$')
+                - item.value != benchmark_current_settings.json[item.key] | default(none)
+              no_log: true
+            - name: Restore only settings changed during the benchmark
+              ansible.builtin.uri:
+                url: 'https://{{ gitlab_host }}/api/v4/application/settings'
+                method: PUT
+                headers: {PRIVATE-TOKEN: '{{ benchmark_pat }}'}
+                body_format: json
+                body: '{{ benchmark_restore_settings }}'
+                ca_path: '{{ public_tls_certificate_file if ip_access else omit }}'
+              when: benchmark_restore_settings | length > 0
+              no_log: true
+          always:
+            - name: Revoke the temporary administrator token
+              ansible.builtin.uri:
+                url: 'https://{{ gitlab_host }}/api/v4/personal_access_tokens/self'
+                method: DELETE
+                headers: {PRIVATE-TOKEN: '{{ benchmark_pat }}'}
+                ca_path: '{{ public_tls_certificate_file if ip_access else omit }}'
+                status_code: [204, 401]
+              no_log: true
+            - name: Remove temporary Kubernetes credential and configuration
+              kubernetes.core.k8s:
+                kubeconfig: '{{ kubeconfig_path }}'
+                api_version: v1
+                kind: '{{ item }}'
+                name: '{{ benchmark_run }}'
+                namespace: '{{ loadtest_namespace }}'
+                state: absent
+              loop: [Secret, ConfigMap]

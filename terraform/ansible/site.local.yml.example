@@ -1,0 +1,9 @@
+---
+# Defaults use identity/fullchain.pem and identity/privkey.pem.
+# Ansible generates a self-signed pair if either file is absent.
+# A complete existing pair must cover the public IP or all three configured DNS names.
+# Override only when you deliberately use a different identity directory:
+# identity_dir: /absolute/path/to/identity
+# Increase backup working space when necessary:
+# backup_scratch_size: 2Ti
+{}

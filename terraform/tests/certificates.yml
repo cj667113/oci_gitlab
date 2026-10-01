@@ -1,0 +1,106 @@
+---
+# Local integration test of the real certificate tasks; output_dir must be disposable.
+- name: Verify certificate generation, preservation and validation
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    ansible_python_interpreter: '{{ ansible_playbook_python }}'
+    identity_dir: '{{ output_dir }}/identity'
+    public_tls_certificate_file: '{{ identity_dir }}/fullchain.pem'
+    public_tls_private_key_file: '{{ identity_dir }}/privkey.pem'
+    public_ip: 192.0.2.10
+    gitlab_domain: ''
+    ip_access: true
+    gitlab_host: '{{ public_ip }}'
+  tasks:
+    - name: Generate a new IP certificate
+      ansible.builtin.include_tasks: ../ansible/tasks/public_certificate.yml
+    - name: Save original key and certificate hashes
+      ansible.builtin.stat:
+        path: '{{ item }}'
+        checksum_algorithm: sha256
+      loop: ['{{ public_tls_certificate_file }}', '{{ public_tls_private_key_file }}']
+      register: originals
+    - name: Repeat setup with the complete pair
+      ansible.builtin.include_tasks: ../ansible/tasks/public_certificate.yml
+    - name: Read repeated hashes
+      ansible.builtin.stat:
+        path: '{{ item }}'
+        checksum_algorithm: sha256
+      loop: ['{{ public_tls_certificate_file }}', '{{ public_tls_private_key_file }}']
+      register: repeated
+    - name: Require complete pair preservation and a protected private key
+      ansible.builtin.assert:
+        that:
+          - originals.results[0].stat.checksum == repeated.results[0].stat.checksum
+          - originals.results[1].stat.checksum == repeated.results[1].stat.checksum
+          - repeated.results[1].stat.mode == '0600'
+          - public_tls_selfsigned
+    - name: Delete only the disposable test certificate
+      ansible.builtin.file:
+        path: '{{ public_tls_certificate_file }}'
+        state: absent
+    - name: Generate a certificate using the retained key
+      ansible.builtin.include_tasks: ../ansible/tasks/public_certificate.yml
+    - name: Hash the retained key
+      ansible.builtin.stat:
+        path: '{{ public_tls_private_key_file }}'
+        checksum_algorithm: sha256
+      register: retained
+    - name: Require key preservation
+      ansible.builtin.assert:
+        that: retained.stat.checksum == originals.results[1].stat.checksum
+    - name: Delete only the disposable test private key
+      ansible.builtin.file:
+        path: '{{ public_tls_private_key_file }}'
+        state: absent
+    - name: Recover from an orphaned certificate
+      ansible.builtin.include_tasks: ../ansible/tasks/public_certificate.yml
+    - name: Generate a certificate with DNS and IP SANs in a separate test directory
+      ansible.builtin.include_tasks: ../ansible/tasks/public_certificate.yml
+      vars:
+        identity_dir: '{{ output_dir }}/dns-identity'
+        ip_access: false
+        gitlab_domain: example.test
+        gitlab_host: gitlab.example.test
+    - name: Verify the DNS certificate also covers the public IP
+      ansible.builtin.assert:
+        that: "'IP:192.0.2.10' in public_certificate_info.subject_alt_name"
+    - name: Reject a complete certificate for the wrong IP
+      block:
+        - name: Attempt reuse with a different endpoint
+          ansible.builtin.include_tasks: ../ansible/tasks/public_certificate.yml
+          vars:
+            public_ip: 192.0.2.11
+      rescue:
+        - name: Require rejection by certificate validation
+          ansible.builtin.assert:
+            that: ansible_failed_task.name == 'Require a valid matching certificate for the selected access mode'
+        - name: Record expected endpoint rejection
+          ansible.builtin.set_fact:
+            endpoint_rejected: true
+    - name: Require endpoint validation
+      ansible.builtin.assert:
+        that: endpoint_rejected | default(false)
+    - name: Replace only the disposable key with a mismatched test key
+      ansible.builtin.copy:
+        src: '{{ output_dir }}/dns-identity/privkey.pem'
+        dest: '{{ public_tls_private_key_file }}'
+        mode: '0600'
+    - name: Reject a mismatched complete pair
+      block:
+        - name: Attempt reuse of a mismatched pair
+          ansible.builtin.include_tasks: ../ansible/tasks/public_certificate.yml
+      rescue:
+        - name: Require rejection by key-pair validation
+          ansible.builtin.assert:
+            that:
+              - ansible_failed_task.name == 'Require a valid matching certificate for the selected access mode'
+              - ansible_failed_result.assertion == 'public_certificate_info.public_key == public_key_info.public_key'
+        - name: Record expected key mismatch rejection
+          ansible.builtin.set_fact:
+            mismatch_rejected: true
+    - name: Require key-pair validation
+      ansible.builtin.assert:
+        that: mismatch_rejected | default(false)

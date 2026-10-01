@@ -1,0 +1,60 @@
+# Terraform caches, state, saved plans, and local inputs (may contain secrets).
+# Terraform init provider/module downloads and backend metadata.
+.terraform/
+# Local state, workspace state, and state-operation locks.
+terraform.tfstate.d/
+.terraform.tfstate.lock.info
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfplan.*
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
+!*.tfvars.json.example
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+# Commit .terraform.lock.hcl and the example inputs for reproducible setup.
+
+# Rendered deployment files and local Ansible configuration.
+terraform/generated/
+terraform/ansible/site.local.yml
+.ansible/
+*.retry
+
+# Python/tool caches and local environments.
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+*.log
+
+# Benchmark output and persistent private deployment identity.
+identity/**
+!identity/oci/
+!identity/oci/config.example
+
+# Operating-system metadata.
+.DS_Store
+._*
+Thumbs.db
+
+# Local repository guidance.
+AGENTS.md

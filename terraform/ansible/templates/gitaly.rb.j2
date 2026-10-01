@@ -1,0 +1,15 @@
+# Managed by Ansible. This host stores one replica in the default virtual storage.
+roles(['gitaly_role'])
+gitlab_rails['auto_migrate'] = false
+gitlab_rails['internal_api_url'] = {{ ('https://' ~ gitlab_host) | to_json }}
+gitaly['gitlab_secret'] = {{ secrets.shell | to_json }}
+node_exporter['listen_address'] = '0.0.0.0:9100'
+gitaly['configuration'] = {
+  listen_addr: nil,
+  tls_listen_addr: '0.0.0.0:8076',
+  prometheus_listen_addr: '0.0.0.0:9236',
+  tls: { certificate_path: '/etc/gitlab/ssl/server.crt', key_path: '/etc/gitlab/ssl/server.key' },
+  auth: { token: {{ secrets.gitaly | to_json }} },
+  pack_objects_cache: { enabled: true },
+  storage: [{ name: {{ inventory_hostname | to_json }}, path: '/var/opt/gitlab/git-data/repositories' }]
+}

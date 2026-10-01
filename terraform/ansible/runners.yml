@@ -1,0 +1,145 @@
+---
+- name: Register and install dedicated OKE GitLab runners
+  hosts: controller
+  gather_facts: false
+  vars:
+    runner_namespace: gitlab-loadtest
+    runner_token_file: '{{ environment_identity_dir }}/runner-token'
+  environment:
+    OCI_CLI_PROFILE: '{{ oci_profile }}'
+    OCI_CLI_CONFIG_FILE: '{{ oci_config_file }}'
+  tasks:
+    - name: Require the GitLab API to be ready
+      ansible.builtin.uri:
+        url: 'https://{{ gitlab_host }}/-/readiness'
+        ca_path: '{{ public_tls_certificate_file if ip_access else omit }}'
+        status_code: 200
+    - name: Check for preserved runner token
+      ansible.builtin.stat:
+        path: '{{ runner_token_file }}'
+      register: saved_runner_token
+    - name: Create runner authentication token once
+      when: not saved_runner_token.stat.exists
+      block:
+        - name: Generate a short-lived bootstrap API token
+          ansible.builtin.set_fact:
+            bootstrap_pat: '{{ lookup("password", "/dev/null length=48 chars=ascii_letters,digits") }}'
+          no_log: true
+        - name: Find running Toolbox pod
+          kubernetes.core.k8s_info:
+            kubeconfig: '{{ kubeconfig_path }}'
+            kind: Pod
+            namespace: '{{ gitlab_namespace }}'
+            label_selectors: [app=toolbox, release=gitlab]
+            field_selectors: [status.phase=Running]
+          register: toolbox_pods
+        - name: Require Toolbox for API bootstrap
+          ansible.builtin.assert:
+            that: toolbox_pods.resources | length > 0
+        - name: Create one-day create_runner token for root
+          kubernetes.core.k8s_exec:
+            kubeconfig: '{{ kubeconfig_path }}'
+            namespace: '{{ gitlab_namespace }}'
+            pod: '{{ toolbox_pods.resources[0].metadata.name }}'
+            container: toolbox
+            command: >-
+              gitlab-rails runner
+              't = User.find_by_username("root").personal_access_tokens.create!(scopes: ["create_runner"], name: "ansible-runner-bootstrap", expires_at: Date.tomorrow); t.set_token("{{ bootstrap_pat }}"); t.save!'
+          no_log: true
+        - name: Register a tagged instance runner through the supported API
+          ansible.builtin.uri:
+            url: 'https://{{ gitlab_host }}/api/v4/user/runners'
+            method: POST
+            headers: {PRIVATE-TOKEN: '{{ bootstrap_pat }}'}
+            body_format: form-urlencoded
+            body:
+              runner_type: instance_type
+              description: dev-oke-loadtest
+              tag_list: loadtest
+              run_untagged: 'false'
+              maximum_timeout: '28800'
+            ca_path: '{{ public_tls_certificate_file if ip_access else omit }}'
+            status_code: 201
+          register: created_runner
+          no_log: true
+        - name: Preserve runner token outside source control
+          ansible.builtin.copy:
+            content: '{{ created_runner.json.token }}'
+            dest: '{{ runner_token_file }}'
+            mode: '0600'
+          no_log: true
+      always:
+        - name: Revoke temporary bootstrap token
+          ansible.builtin.uri:
+            url: 'https://{{ gitlab_host }}/api/v4/personal_access_tokens/self'
+            method: DELETE
+            headers: {PRIVATE-TOKEN: '{{ bootstrap_pat }}'}
+            ca_path: '{{ public_tls_certificate_file if ip_access else omit }}'
+            status_code: 204
+          when: bootstrap_pat is defined
+          no_log: true
+    - name: Create dedicated runner namespace
+      kubernetes.core.k8s:
+        kubeconfig: '{{ kubeconfig_path }}'
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata: {name: '{{ runner_namespace }}'}
+    - name: Store runner TLS trust in Kubernetes
+      kubernetes.core.k8s:
+        kubeconfig: '{{ kubeconfig_path }}'
+        definition:
+          apiVersion: v1
+          kind: Secret
+          metadata: {name: gitlab-loadtest-ca, namespace: '{{ runner_namespace }}'}
+          stringData: '{{ {"ca.crt": lookup("file", public_tls_certificate_file), (gitlab_host ~ ".crt"): lookup("file", public_tls_certificate_file)} }}'
+      no_log: true
+    - name: Store runner authentication token in Kubernetes
+      kubernetes.core.k8s:
+        kubeconfig: '{{ kubeconfig_path }}'
+        definition:
+          apiVersion: v1
+          kind: Secret
+          metadata: {name: gitlab-loadtest-runner, namespace: '{{ runner_namespace }}'}
+          stringData:
+            runner-registration-token: ''
+            runner-token: '{{ lookup("file", runner_token_file) }}'
+      no_log: true
+    - name: Render standalone runner chart values
+      ansible.builtin.template:
+        src: runner-values.yml.j2
+        dest: '{{ state_dir }}/runner-values.yml'
+        mode: '0600'
+    - name: Install standalone GitLab Runner chart
+      kubernetes.core.helm:
+        kubeconfig: '{{ kubeconfig_path }}'
+        name: gitlab-loadtest-runner
+        chart_ref: gitlab-runner
+        chart_repo_url: https://charts.gitlab.io
+        chart_version: '{{ runner_chart_version }}'
+        release_namespace: '{{ runner_namespace }}'
+        values_files: ['{{ state_dir }}/runner-values.yml']
+        wait: true
+        timeout: 10m
+    - name: Find a ready runner manager pod
+      kubernetes.core.k8s_info:
+        kubeconfig: '{{ kubeconfig_path }}'
+        kind: Pod
+        namespace: '{{ runner_namespace }}'
+        label_selectors: [app=gitlab-loadtest-runner-gitlab-runner]
+        wait: true
+        wait_timeout: 300
+        wait_condition:
+          type: Ready
+          status: 'True'
+      register: runner_pods
+    - name: Require a running runner manager
+      ansible.builtin.assert:
+        that: runner_pods.resources | length > 0
+    - name: Verify the manager authenticates with GitLab
+      kubernetes.core.k8s_exec:
+        kubeconfig: '{{ kubeconfig_path }}'
+        namespace: '{{ runner_namespace }}'
+        pod: '{{ runner_pods.resources[0].metadata.name }}'
+        command: gitlab-runner verify
+      changed_when: false

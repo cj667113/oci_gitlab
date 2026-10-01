@@ -1,0 +1,24 @@
+---
+# Upgrade the chart and Linux package together, following GitLab's upgrade stops.
+gitlab_chart_version: '10.4.0'
+gitlab_package_version: '19.4.0-ee.0'
+runner_chart_version: '0.93.0'
+traefik_chart_version: '41.6.0'
+gitlab_namespace: gitlab
+identity_dir: '{{ playbook_dir }}/../../identity'
+environment_identity_dir: "{{ identity_dir }}/{{ deployment_mode | default('Dev') | lower }}"
+backend_pki_dir: '{{ environment_identity_dir }}/pki'
+state_dir: '{{ environment_identity_dir }}/ansible'
+kubeconfig_path: '{{ environment_identity_dir }}/kubeconfig'
+public_tls_certificate_file: '{{ identity_dir }}/fullchain.pem'
+public_tls_private_key_file: '{{ identity_dir }}/privkey.pem'
+# Increase to cover actual backup working space.
+backup_scratch_size: 1Ti
+# Sized with the web pool in main.tf; reserve memory rather than overcommit it.
+web_replicas: 6
+web_worker_processes: 4
+web_memory_gib: 12
+web_worker_max_memory_mb: 1500
+sidekiq_replicas: 6
+service_replicas: 3
+monitoring_replicas: 2

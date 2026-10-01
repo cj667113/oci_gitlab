@@ -1,0 +1,23 @@
+---
+- name: Create host key
+  community.crypto.openssl_privatekey:
+    path: '{{ backend_pki_dir }}/{{ certificate_host }}.key'
+    type: RSA
+    size: 3072
+    mode: '0600'
+- name: Create host CSR with backend and load-balancer SANs
+  community.crypto.openssl_csr:
+    path: '{{ backend_pki_dir }}/{{ certificate_host }}.csr'
+    privatekey_path: '{{ backend_pki_dir }}/{{ certificate_host }}.key'
+    common_name: '{{ certificate_host }}'
+    subject_alt_name: '{{ ["IP:" ~ hostvars[certificate_host].ansible_host] + (["IP:" ~ praefect_address] if certificate_host in groups.praefect else []) }}'
+    key_usage: [digitalSignature, keyEncipherment]
+    extended_key_usage: [serverAuth]
+- name: Sign host certificate using persistent private CA
+  community.crypto.x509_certificate:
+    path: '{{ backend_pki_dir }}/{{ certificate_host }}.crt'
+    csr_path: '{{ backend_pki_dir }}/{{ certificate_host }}.csr'
+    ownca_path: '{{ backend_pki_dir }}/ca.crt'
+    ownca_privatekey_path: '{{ backend_pki_dir }}/ca.key'
+    ownca_not_after: '+825d'
+    provider: ownca

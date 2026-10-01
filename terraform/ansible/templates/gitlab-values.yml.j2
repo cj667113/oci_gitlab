@@ -1,0 +1,266 @@
+# Dev and Prod share the same HA topology and capacity.
+global:
+  edition: ee
+  hpa:
+    apiVersion: autoscaling/v2
+  pdb:
+    apiVersion: policy/v1
+  batch:
+    cronJob:
+      apiVersion: batch/v1
+  hosts:
+    domain: {{ (public_ip if ip_access else gitlab_domain) | to_json }}
+    https: true
+    ssh: {{ gitlab_host | to_json }}
+    gitlab:
+      name: {{ gitlab_host | to_json }}
+    registry:
+      name: {{ (public_ip if ip_access else 'registry.' ~ gitlab_domain) | to_json }}
+    kas:
+      name: {{ (public_ip if ip_access else 'kas.' ~ gitlab_domain) | to_json }}
+  gatewayApi:
+    enabled: false
+    installEnvoy: false
+    configureEnvoy: false
+    configureCertmanager: false
+  ingress:
+    apiVersion: networking.k8s.io/v1
+    enabled: true
+    provider: traefik
+    class: traefik
+    configureCertmanager: false
+    annotations:
+      traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    tls:
+      enabled: true
+      secretName: gitlab-public-tls
+  traefik:
+    apiVersion: traefik.io/v1alpha1
+  nodeSelector:
+    gitlab-pool: support
+  certificates:
+    customCAs:
+      - secret: gitlab-private-ca
+  # libpq TLS via environment avoids the chart's mutual-TLS-only psql.ssl block.
+  # The certificate init container adds the supplied OCI CA to this bundle.
+  extraEnv:
+    PGSSLMODE: verify-full
+    PGSSLROOTCERT: /etc/ssl/certs/ca-certificates.crt
+  psql:
+    host: {{ postgres.main.host }}
+    port: 5432
+    username: gitlab
+    database: gitlabhq_production
+    preparedStatements: false
+    password:
+      secret: gitlab-external
+      key: postgres-password
+  redis:
+    host: {{ redis_host }}
+    port: 6379
+    scheme: rediss
+    auth:
+      enabled: false
+  gitaly:
+    enabled: false
+    external:
+      - name: default
+        hostname: {{ praefect_address }}
+        port: 3305
+        tlsEnabled: true
+    authToken:
+      secret: gitlab-external
+      key: gitaly-token
+  praefect:
+    enabled: false
+  shell:
+    authToken:
+      secret: gitlab-external
+      key: shell-token
+  initialRootPassword:
+    secret: gitlab-external
+    key: root-password
+  registry:
+    port: {{ 5050 if ip_access else 443 }}
+  appConfig:
+    gitlab_kas:
+      externalUrl: {{ ('wss://' ~ public_ip ~ ':8150' if ip_access else 'wss://kas.' ~ gitlab_domain) | to_json }}
+    enableUsagePing: false
+    object_store:
+      enabled: true
+      proxy_download: true
+      connection:
+        secret: gitlab-object-storage
+        key: connection
+{% for key, bucket in [('artifacts', 'artifacts'), ('lfs', 'lfs'), ('uploads', 'uploads'), ('packages', 'packages'), ('externalDiffs', 'external-diffs'), ('terraformState', 'terraform-state'), ('dependencyProxy', 'dependency-proxy'), ('ciSecureFiles', 'ci-secure-files')] %}
+    {{ key }}:
+      enabled: true
+      bucket: {{ object_storage.buckets[bucket] }}
+{% endfor %}
+    backups:
+      bucket: {{ object_storage.buckets.backups }}
+      tmpBucket: {{ object_storage.buckets['tmp-backups'] }}
+  kas:
+    enabled: true
+installCertmanager: false
+nginx-ingress:
+  enabled: false
+nginx-ingress-geo:
+  enabled: false
+traefik:
+  install: false
+# External managed services only; keys also protect upgrades from enabling defaults.
+postgresql:
+  install: false
+redis:
+  install: false
+minio:
+  enabled: false
+gitlab-runner:
+  install: false
+gitlab:
+  webservice:
+    ingress:
+      enabled: {{ (not ip_access) | lower }}
+    nodeSelector: {gitlab-pool: web}
+    minReplicas: {{ web_replicas }}
+    maxReplicas: {{ web_replicas }}
+    maxUnavailable: 1
+    workerProcesses: {{ web_worker_processes }}
+    puma:
+      disableWorkerKiller: false
+      workerMaxMemory: {{ web_worker_max_memory_mb }}
+    deployment:
+      strategy:
+        rollingUpdate:
+          maxSurge: 0
+          maxUnavailable: 1
+    resources:
+      requests: {cpu: '{{ web_worker_processes }}', memory: '{{ web_memory_gib }}Gi'}
+      limits: {memory: '{{ web_memory_gib }}Gi'}
+    workhorse:
+      resources:
+        requests: {cpu: 100m, memory: 100Mi}
+        limits: {memory: 500Mi}
+    topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: DoNotSchedule
+        nodeTaintsPolicy: Honor
+        labelSelector:
+          matchLabels: {app: webservice, release: gitlab}
+  sidekiq:
+    nodeSelector: {gitlab-pool: sidekiq}
+    minReplicas: {{ sidekiq_replicas }}
+    maxReplicas: {{ sidekiq_replicas }}
+    maxUnavailable: 1
+    concurrency: 20
+    resources:
+      requests: {cpu: 900m, memory: 2Gi}
+      limits: {memory: 4Gi}
+    topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: DoNotSchedule
+        nodeTaintsPolicy: Honor
+        labelSelector:
+          matchLabels: {app: sidekiq, release: gitlab}
+  gitlab-shell:
+    nodeSelector: {gitlab-pool: support}
+    minReplicas: {{ service_replicas }}
+    maxReplicas: {{ service_replicas }}
+    maxUnavailable: 1
+    antiAffinity: hard
+  kas:
+    ingress:
+      enabled: {{ (not ip_access) | lower }}
+    nodeSelector: {gitlab-pool: support}
+    minReplicas: {{ service_replicas }}
+    maxReplicas: {{ service_replicas }}
+    maxUnavailable: 1
+    antiAffinity: hard
+  toolbox:
+    nodeSelector: {gitlab-pool: support}
+    backups:
+      objectStorage:
+        backend: s3
+        config:
+          secret: gitlab-object-storage
+          key: s3cfg
+      cron:
+        enabled: true
+        schedule: '0 3 * * *'
+        concurrencyPolicy: Forbid
+        persistence:
+          enabled: true
+          useGenericEphemeralVolume: true
+          storageClass: oci-bv
+          size: {{ backup_scratch_size }}
+        resources:
+          requests: {cpu: 500m, memory: 1Gi}
+          limits: {memory: 4Gi}
+  migrations:
+    nodeSelector: {gitlab-pool: support}
+registry:
+  ingress:
+    enabled: {{ (not ip_access) | lower }}
+  nodeSelector: {gitlab-pool: support}
+  hpa:
+    minReplicas: {{ service_replicas }}
+    maxReplicas: {{ service_replicas }}
+  maxUnavailable: 1
+  storage:
+    secret: gitlab-object-storage
+    key: registry
+  # OCI S3 storage is shared; the chart generates one shared registry HTTP secret.
+  database:
+    enabled: false
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: DoNotSchedule
+      nodeTaintsPolicy: Honor
+      labelSelector:
+        matchLabels: {app: registry, release: gitlab}
+prometheus:
+  install: true
+  alertmanager:
+    enabled: false
+  prometheus-pushgateway:
+    enabled: false
+  server:
+    nodeSelector: {gitlab-pool: support}
+    replicaCount: {{ monitoring_replicas }}
+    persistentVolume:
+      enabled: false
+    retention: 2d
+    resources:
+      requests: {cpu: 300m, memory: 1Gi}
+      limits: {memory: 2Gi}
+    affinity:
+      podAntiAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchLabels:
+                app.kubernetes.io/name: prometheus
+                app.kubernetes.io/component: server
+            topologyKey: kubernetes.io/hostname
+  extraScrapeConfigs: |
+    - job_name: external-gitaly
+      static_configs:
+        - targets:
+{% for host in groups.gitaly %}
+            - {{ hostvars[host].ansible_host }}:9236
+{% endfor %}
+    - job_name: external-praefect
+      static_configs:
+        - targets:
+{% for host in groups.praefect %}
+            - {{ hostvars[host].ansible_host }}:9652
+{% endfor %}
+    - job_name: external-node
+      static_configs:
+        - targets:
+{% for host in groups.gitaly + groups.praefect %}
+            - {{ hostvars[host].ansible_host }}:9100
+{% endfor %}

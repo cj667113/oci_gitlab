@@ -1,0 +1,23 @@
+region                   = "us-ashburn-1"
+tenancy_home_region      = "us-ashburn-1"
+tenancy_ocid             = "ocid1.tenancy.oc1..REPLACE"
+user_ocid                = "ocid1.user.oc1..REPLACE_WITH_DEPLOYING_USER"
+fingerprint              = "REPLACE_WITH_API_KEY_FINGERPRINT"
+compartment_ocid         = "ocid1.compartment.oc1..REPLACE"
+oci_profile              = "DEFAULT"
+mode                     = "Dev" # Default; same HA topology and capacity as Prod.
+name                     = "gitlab-dev"
+domain                   = "" # Public IP access; DNS is optional in either mode.
+# OCI API key: ../identity/oci/api_key.pem; CLI config: ../identity/oci/config.
+# SSH public key: ../identity/ssh/id_ed25519.pub; private key: identity/ssh/id_ed25519.
+admin_cidrs              = [] # Add private routed controller/VPN CIDRs only when needed.
+# bastion_ssh_cidrs       = ["203.0.113.10/32"] # Dev bastion SSH source; set to your actual public IP/CIDR.
+client_cidrs             = ["0.0.0.0/0"]
+vcn_cidr                 = "10.60.0.0/16"
+kubernetes_version       = "v1.34.2" # EXAMPLE: select a supported OKE version and matching image.
+oke_image_ocid           = "ocid1.image.oc1.iad.REPLACE_WITH_MATCHING_X86_64_OKE_IMAGE"
+ubuntu_image_ocid        = "ocid1.image.oc1.iad.REPLACE_WITH_UBUNTU_24_04_X86_64_IMAGE"
+object_storage_user_ocid = "ocid1.user.oc1..REPLACE_WITH_DEDICATED_S3_USER"
+# dns_zone_ocid          = "ocid1.dns-zone.oc1..REPLACE"
+gitaly_volume_gb         = 1024
+require_three_ads       = true

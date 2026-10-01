@@ -1,0 +1,41 @@
+# Managed by Ansible. Only the first node migrates the dedicated database.
+# Praefect has no Omnibus role shortcut: disable the single-node services explicitly.
+gitaly['enable'] = false
+postgresql['enable'] = false
+redis['enable'] = false
+nginx['enable'] = false
+puma['enable'] = false
+sidekiq['enable'] = false
+gitlab_workhorse['enable'] = false
+prometheus['enable'] = false
+alertmanager['enable'] = false
+gitlab_exporter['enable'] = false
+gitlab_kas['enable'] = false
+registry['enable'] = false
+praefect['enable'] = true
+node_exporter['enable'] = true
+gitlab_rails['auto_migrate'] = false
+praefect['auto_migrate'] = {{ 'true' if inventory_hostname == groups.praefect[0] else 'false' }}
+node_exporter['listen_address'] = '0.0.0.0:9100'
+praefect['configuration'] = {
+  listen_addr: nil,
+  tls_listen_addr: '0.0.0.0:3305',
+  prometheus_listen_addr: '0.0.0.0:9652',
+  tls: { certificate_path: '/etc/gitlab/ssl/server.crt', key_path: '/etc/gitlab/ssl/server.key' },
+  auth: { token: {{ secrets.praefect | to_json }} },
+  database: {
+    host: {{ postgres.praefect.host | to_json }}, port: 5432,
+    user: 'praefect', dbname: 'praefect_production',
+    password: {{ secrets.praefect_db | to_json }},
+    sslmode: 'verify-full', sslrootcert: '/etc/gitlab/trusted-certs/postgres.crt'
+  },
+  virtual_storage: [{
+    name: 'default',
+    default_replication_factor: {{ groups.gitaly | length }},
+    node: [
+{% for host in groups.gitaly %}
+      { storage: {{ host | to_json }}, address: {{ ('tls://' ~ hostvars[host].ansible_host ~ ':8076') | to_json }}, token: {{ secrets.gitaly | to_json }} }{{ ',' if not loop.last else '' }}
+{% endfor %}
+    ]
+  }]
+}

@@ -1,0 +1,6 @@
+ansible-core>=2.19,<2.21
+kubernetes>=32,<36
+cryptography>=44
+PyYAML>=6
+oci-cli>=3.60,<4
+matplotlib>=3.9,<4

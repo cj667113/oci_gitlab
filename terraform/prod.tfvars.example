@@ -1,0 +1,7 @@
+# Overlay on your completed terraform.tfvars, in a separate production checkout/state:
+# terraform plan -var-file=prod.tfvars -out=deployment.tfplan
+mode   = "Prod"
+name   = "gitlab-prod"
+domain = "example.com" # Optional: use "" for the same public-IP access as Dev.
+# dns_zone_ocid = "ocid1.dns-zone.oc1..REPLACE"
+# Infrastructure, sizing, replicas, backups and HA placement match Dev exactly.

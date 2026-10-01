@@ -1,0 +1,438 @@
+---
+- name: Prepare the controller and persistent private PKI
+  hosts: controller
+  gather_facts: false
+  environment:
+    OCI_CLI_PROFILE: '{{ oci_profile }}'
+    OCI_CLI_CONFIG_FILE: '{{ oci_config_file }}'
+  tasks:
+    - name: Check mandatory deployment inputs
+      ansible.builtin.assert:
+        that:
+          - deployment_mode | lower in ['dev', 'prod']
+          - gitlab_host | length > 0
+          - gitlab_package_version == '19.4.0-ee.0'
+          - gitlab_chart_version == '10.4.0'
+        fail_msg: 'Use the Terraform-generated inventory and upgrade the checked package/chart pair together.'
+    - name: Create protected persistent controller state
+      ansible.builtin.file:
+        path: '{{ item }}'
+        state: directory
+        mode: '0700'
+      loop: ['{{ state_dir }}', '{{ environment_identity_dir }}', '{{ backend_pki_dir }}']
+    - name: Prepare public TLS from identity files or a self-signed fallback
+      ansible.builtin.include_tasks: tasks/public_certificate.yml
+    - name: Check Helm is installed on the controller
+      ansible.builtin.command: helm version --short
+      changed_when: false
+    - name: Obtain private OKE kubeconfig using the existing OCI identity
+      ansible.builtin.command:
+        argv:
+          - oci
+          - ce
+          - cluster
+          - create-kubeconfig
+          - --cluster-id
+          - '{{ cluster_id }}'
+          - --file
+          - '{{ kubeconfig_path }}'
+          - --region
+          - '{{ oci_region }}'
+          - --profile
+          - '{{ oci_profile }}'
+          - --token-version
+          - 2.0.0
+          - --kube-endpoint
+          - PRIVATE_ENDPOINT
+        creates: '{{ kubeconfig_path }}'
+    - name: Restrict kubeconfig permissions
+      ansible.builtin.file:
+        path: '{{ kubeconfig_path }}'
+        mode: '0600'
+    - name: Create private CA key without rotating existing keys
+      community.crypto.openssl_privatekey:
+        path: '{{ backend_pki_dir }}/ca.key'
+        type: RSA
+        size: 4096
+        mode: '0600'
+    - name: Create CA request
+      community.crypto.openssl_csr:
+        path: '{{ backend_pki_dir }}/ca.csr'
+        privatekey_path: '{{ backend_pki_dir }}/ca.key'
+        common_name: GitLab internal Gitaly CA
+        basic_constraints: ['CA:TRUE']
+        basic_constraints_critical: true
+        key_usage: [keyCertSign, cRLSign]
+        key_usage_critical: true
+    - name: Issue internal CA
+      community.crypto.x509_certificate:
+        path: '{{ backend_pki_dir }}/ca.crt'
+        csr_path: '{{ backend_pki_dir }}/ca.csr'
+        privatekey_path: '{{ backend_pki_dir }}/ca.key'
+        provider: selfsigned
+        selfsigned_not_after: '+3650d'
+    - name: Issue a separate TLS certificate for each storage host
+      ansible.builtin.include_tasks: tasks/certificate.yml
+      loop: '{{ groups.gitaly + groups.praefect }}'
+      loop_control:
+        loop_var: certificate_host
+    - name: Save PostgreSQL trust anchors
+      ansible.builtin.copy:
+        content: '{{ item.value.ca }}'
+        dest: '{{ backend_pki_dir }}/postgres-{{ item.key }}.crt'
+        mode: '0600'
+      loop: '{{ postgres | dict2items }}'
+      no_log: true
+
+- name: Prepare private Ubuntu backend hosts
+  hosts: gitaly:praefect
+  serial: 1
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Wait for SSH after the instance becomes RUNNING
+      ansible.builtin.wait_for_connection:
+        timeout: 600
+    - name: Gather host facts
+      ansible.builtin.setup:
+    - name: Wait for platform image initialization
+      ansible.builtin.command: cloud-init status --wait
+      changed_when: false
+    - name: Require the supported image
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.distribution == 'Ubuntu'
+          - ansible_facts.distribution_version == '24.04'
+          - ansible_facts.architecture == 'x86_64'
+    - name: Install operating system prerequisites
+      ansible.builtin.apt:
+        name: [acl, ca-certificates, curl, openssh-server, tzdata, xfsprogs, python3-psycopg2, iptables-persistent]
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+    - name: Create GitLab configuration directories
+      ansible.builtin.file:
+        path: '{{ item }}'
+        state: directory
+        mode: '0755'
+      loop: [/etc/gitlab, /etc/gitlab/ssl, /etc/gitlab/trusted-certs, /etc/apt/keyrings]
+    - name: Prevent the package postinstall from configuring an all-in-one instance
+      ansible.builtin.copy:
+        content: ''
+        dest: /etc/gitlab/skip-auto-reconfigure
+        mode: '0644'
+        force: false
+    - name: Install GitLab repository signing key
+      ansible.builtin.get_url:
+        url: https://packages.gitlab.com/gitlab/gitlab-ee/gpgkey
+        dest: /etc/apt/keyrings/gitlab.asc
+        mode: '0644'
+    - name: Configure the signed GitLab apt repository
+      ansible.builtin.apt_repository:
+        repo: 'deb [signed-by=/etc/apt/keyrings/gitlab.asc] https://packages.gitlab.com/gitlab/gitlab-ee/ubuntu/ noble main'
+        filename: gitlab-ee
+        state: present
+    - name: Install pinned GitLab backend software
+      ansible.builtin.apt:
+        name: 'gitlab-ee={{ gitlab_package_version }}'
+        state: present
+        allow_downgrade: false
+      register: backend_package
+    - name: Ensure the backend service account exists before the first reconfigure
+      ansible.builtin.group:
+        name: git
+        system: true
+    - name: Create the backend service user
+      ansible.builtin.user:
+        name: git
+        group: git
+        system: true
+        home: /var/opt/gitlab
+        create_home: false
+        shell: /bin/sh
+    - name: Install private TLS materials
+      ansible.builtin.copy:
+        src: '{{ backend_pki_dir }}/{{ inventory_hostname }}.{{ item.ext }}'
+        dest: '/etc/gitlab/ssl/server.{{ item.ext }}'
+        owner: root
+        group: git
+        mode: '{{ item.mode }}'
+      loop:
+        - { ext: crt, mode: '0644' }
+        - { ext: key, mode: '0640' }
+      register: backend_tls
+    - name: Trust internal Gitaly CA
+      ansible.builtin.copy:
+        src: '{{ backend_pki_dir }}/ca.crt'
+        dest: /etc/gitlab/trusted-certs/gitaly-ca.crt
+        mode: '0644'
+      register: backend_ca
+    - name: Trust the public endpoint certificate for Gitaly callbacks
+      ansible.builtin.copy:
+        src: '{{ public_tls_certificate_file }}'
+        dest: /etc/gitlab/trusted-certs/gitlab-public.crt
+        mode: '0644'
+      register: backend_public_ca
+    - name: Install Praefect database CA
+      ansible.builtin.copy:
+        src: '{{ backend_pki_dir }}/postgres-praefect.crt'
+        dest: /etc/gitlab/trusted-certs/postgres.crt
+        mode: '0644'
+    - name: Open only the service ports through Ubuntu's image firewall
+      ansible.builtin.include_tasks: tasks/firewall.yml
+
+- name: Prepare repository volumes without overwriting existing filesystems
+  hosts: gitaly
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Wait for the Terraform-attached block device
+      ansible.builtin.wait_for:
+        path: /dev/oracleoci/oraclevdb
+        timeout: 180
+    - name: Create XFS only when no filesystem exists
+      community.general.filesystem:
+        dev: /dev/oracleoci/oraclevdb
+        fstype: xfs
+        force: false
+    - name: Read the filesystem UUID
+      ansible.builtin.command: blkid -s UUID -o value /dev/oracleoci/oraclevdb
+      register: gitaly_uuid
+      changed_when: false
+    - name: Persist and mount repository storage by UUID
+      ansible.posix.mount:
+        path: /var/opt/gitlab/git-data
+        src: 'UUID={{ gitaly_uuid.stdout }}'
+        fstype: xfs
+        opts: defaults,noatime
+        state: mounted
+    - name: Set repository parent ownership
+      ansible.builtin.file:
+        path: /var/opt/gitlab/git-data
+        state: directory
+        owner: git
+        group: git
+        mode: '0700'
+    - name: Prevent GitLab starting without the repository mount
+      ansible.builtin.file:
+        path: /etc/systemd/system/gitlab-runsvdir.service.d
+        state: directory
+        mode: '0755'
+    - name: Require the data volume before starting services
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/gitlab-runsvdir.service.d/storage.conf
+        mode: '0644'
+        content: |
+          [Unit]
+          RequiresMountsFor=/var/opt/gitlab/git-data
+    - name: Reload systemd unit dependencies
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+
+- name: Bootstrap managed PostgreSQL through the first private Praefect host
+  hosts: praefect[0]
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Copy database CAs to the bootstrap host
+      ansible.builtin.copy:
+        src: '{{ backend_pki_dir }}/postgres-{{ item }}.crt'
+        dest: '/etc/gitlab/ssl/postgres-{{ item }}.crt'
+        mode: '0644'
+      loop: [main, praefect]
+    - name: Create roles, databases, and extensions
+      ansible.builtin.include_tasks: tasks/database.yml
+      loop:
+        - { system: main, role: gitlab, database: gitlabhq_production, password_key: gitlab_db }
+        - { system: praefect, role: praefect, database: praefect_production, password_key: praefect_db }
+      loop_control:
+        loop_var: database_spec
+
+- name: Configure Gitaly nodes one at a time
+  hosts: gitaly
+  serial: 1
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Install Gitaly configuration
+      ansible.builtin.template:
+        src: gitaly.rb.j2
+        dest: /etc/gitlab/gitlab.rb
+        mode: '0600'
+      register: backend_config
+      no_log: true
+    - name: Apply Gitaly configuration
+      ansible.builtin.command: gitlab-ctl reconfigure
+      changed_when: backend_config.changed or (backend_package.changed | default(false)) or (backend_tls.changed | default(false)) or (backend_ca.changed | default(false)) or (backend_public_ca.changed | default(false))
+      no_log: true
+    - name: Verify Gitaly is listening
+      ansible.builtin.wait_for:
+        host: '{{ ansible_host }}'
+        port: 8076
+        timeout: 180
+
+- name: Configure Praefect with migrations restricted to the first node
+  hosts: praefect
+  serial: 1
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Install Praefect configuration
+      ansible.builtin.template:
+        src: praefect.rb.j2
+        dest: /etc/gitlab/gitlab.rb
+        mode: '0600'
+      register: backend_config
+      no_log: true
+    - name: Apply Praefect configuration and migrate on the designated deploy node
+      ansible.builtin.command: gitlab-ctl reconfigure
+      changed_when: backend_config.changed or (backend_package.changed | default(false)) or (backend_tls.changed | default(false)) or (backend_ca.changed | default(false)) or (backend_public_ca.changed | default(false))
+      no_log: true
+    - name: Verify Praefect SQL connectivity
+      ansible.builtin.command:
+        argv: [/opt/gitlab/embedded/bin/praefect, -config, /var/opt/gitlab/praefect/config.toml, sql-ping]
+      become_user: git
+      changed_when: false
+    - name: Verify Praefect TLS is listening
+      ansible.builtin.wait_for:
+        host: '{{ ansible_host }}'
+        port: 3305
+        timeout: 180
+
+- name: Deploy GitLab to OKE
+  hosts: controller
+  gather_facts: false
+  environment:
+    OCI_CLI_PROFILE: '{{ oci_profile }}'
+    OCI_CLI_CONFIG_FILE: '{{ oci_config_file }}'
+  tasks:
+    - name: Create namespaces
+      kubernetes.core.k8s:
+        kubeconfig: '{{ kubeconfig_path }}'
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: '{{ item }}'
+      loop: ['{{ gitlab_namespace }}', ingress]
+    - name: Create application secrets
+      kubernetes.core.k8s:
+        kubeconfig: '{{ kubeconfig_path }}'
+        definition: '{{ lookup("template", "secrets.yml.j2") | from_yaml_all | list }}'
+      no_log: true
+    - name: Render reviewable Helm values
+      ansible.builtin.template:
+        src: '{{ item }}.yml.j2'
+        dest: '{{ state_dir }}/{{ item }}.yml'
+        mode: '0600'
+      loop: [gitlab-values, traefik-values]
+      no_log: true
+    - name: Install HA ingress and provision the OCI load balancer
+      kubernetes.core.helm:
+        kubeconfig: '{{ kubeconfig_path }}'
+        name: traefik
+        chart_ref: traefik
+        chart_repo_url: https://traefik.github.io/charts
+        chart_version: '{{ traefik_chart_version }}'
+        release_namespace: ingress
+        values_files: ['{{ state_dir }}/traefik-values.yml']
+        wait: true
+        timeout: 20m
+    - name: Configure default TLS and IP routes after Traefik installs its CRDs
+      kubernetes.core.k8s:
+        kubeconfig: '{{ kubeconfig_path }}'
+        definition: '{{ lookup("template", "routes.yml.j2") | from_yaml_all | select | list }}'
+    - name: Remove IP routes when switching to DNS access
+      kubernetes.core.k8s:
+        kubeconfig: '{{ kubeconfig_path }}'
+        api_version: traefik.io/v1alpha1
+        kind: IngressRoute
+        namespace: '{{ gitlab_namespace }}'
+        name: '{{ item }}'
+        state: absent
+      loop: [gitlab-public-ip, gitlab-registry-ip, gitlab-kas-ip]
+      when: not ip_access
+    - name: Install GitLab with the chart migration job
+      kubernetes.core.helm:
+        kubeconfig: '{{ kubeconfig_path }}'
+        name: gitlab
+        chart_ref: gitlab
+        chart_repo_url: https://charts.gitlab.io
+        chart_version: '{{ gitlab_chart_version }}'
+        release_namespace: '{{ gitlab_namespace }}'
+        values_files: ['{{ state_dir }}/gitlab-values.yml']
+        wait: true
+        timeout: 30m
+    - name: Find the ready Toolbox pod
+      kubernetes.core.k8s_info:
+        kubeconfig: '{{ kubeconfig_path }}'
+        kind: Pod
+        namespace: '{{ gitlab_namespace }}'
+        label_selectors: [app=toolbox, release=gitlab]
+        field_selectors: [status.phase=Running]
+        wait: true
+        wait_timeout: 300
+        wait_condition:
+          type: Ready
+          status: 'True'
+      register: toolbox_pods
+    - name: Require a running Toolbox pod
+      ansible.builtin.assert:
+        that: toolbox_pods.resources | length > 0
+    - name: Enable shared job-log storage for the distributed installation
+      kubernetes.core.k8s_exec:
+        kubeconfig: '{{ kubeconfig_path }}'
+        namespace: '{{ gitlab_namespace }}'
+        pod: '{{ toolbox_pods.resources[0].metadata.name }}'
+        container: toolbox
+        command: >-
+          gitlab-rails runner
+          's = ApplicationSetting.current; if s.ci_job_live_trace_enabled;
+          puts "UNCHANGED"; else; s.update!(ci_job_live_trace_enabled: true);
+          puts "UPDATED"; end'
+      register: incremental_logging
+      changed_when: "'UPDATED' in incremental_logging.stdout"
+    - name: Verify Rails connectivity to external Gitaly
+      kubernetes.core.k8s_exec:
+        kubeconfig: '{{ kubeconfig_path }}'
+        namespace: '{{ gitlab_namespace }}'
+        pod: '{{ toolbox_pods.resources[0].metadata.name }}'
+        container: toolbox
+        command: gitlab-rake gitlab:gitaly:check
+      changed_when: false
+    - name: Wait for GitLab readiness through public TLS
+      ansible.builtin.uri:
+        url: 'https://{{ gitlab_host }}/-/readiness'
+        ca_path: '{{ public_tls_certificate_file if public_tls_selfsigned else omit }}'
+        validate_certs: true
+        status_code: 200
+      register: readiness
+      retries: 30
+      delay: 10
+      until: readiness.status | default(0) == 200
+    - name: Export Kubernetes secrets for encrypted off-host recovery storage
+      kubernetes.core.k8s_info:
+        kubeconfig: '{{ kubeconfig_path }}'
+        kind: Secret
+        namespace: '{{ gitlab_namespace }}'
+      register: recovery_secrets
+      no_log: true
+    - name: Persist secrets snapshot with restricted permissions
+      ansible.builtin.copy:
+        content: '{{ recovery_secrets.resources | to_nice_yaml }}'
+        dest: '{{ environment_identity_dir }}/kubernetes-secrets-recovery.yml'
+        mode: '0600'
+      no_log: true
+
+- name: Verify repository cluster connectivity after Rails starts
+  hosts: praefect[0]
+  become: true
+  become_user: git
+  gather_facts: false
+  tasks:
+    - name: Check cluster nodes and replication configuration
+      ansible.builtin.command:
+        argv: [/opt/gitlab/embedded/bin/praefect, -config, /var/opt/gitlab/praefect/config.toml, check]
+      environment:
+        SSL_CERT_FILE: /etc/gitlab/trusted-certs/gitaly-ca.crt
+      changed_when: false

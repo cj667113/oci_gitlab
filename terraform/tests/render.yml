@@ -1,0 +1,95 @@
+---
+# Offline fixture: renders the same Jinja templates as site.yml, never accesses OCI.
+- name: Render deployment templates with synthetic inputs
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files: [../ansible/group_vars/all.yml]
+  vars:
+    ansible_python_interpreter: '{{ ansible_playbook_python }}'
+    state_dir: '{{ output_dir }}'
+    public_tls_certificate_file: '{{ output_dir }}/ca.crt'
+    public_tls_private_key_file: '{{ output_dir }}/fixture.key'
+    deployment_mode: Dev
+    gitlab_domain: ''
+    ip_access: '{{ gitlab_domain | length == 0 }}'
+    gitlab_host: "{{ public_ip if ip_access else 'gitlab.' ~ gitlab_domain }}"
+    oci_region: us-ashburn-1
+    public_ip: 192.0.2.10
+    public_subnet_id: ocid1.subnet.test
+    public_nsg_id: ocid1.networksecuritygroup.test
+    client_cidrs: ['0.0.0.0/0']
+    praefect_address: 10.60.8.20
+    redis_host: primary.redis.example.test
+    postgres:
+      main: {host: main.postgresql.example.test, ca: TEST-CA}
+      praefect: {host: praefect.postgresql.example.test, ca: TEST-CA}
+    secrets:
+      shell: fake-shell-token
+      root: fake-root-password
+      gitlab_db: fake-gitlab-password
+      praefect_db: fake-praefect-password
+      gitaly: fake-gitaly-token
+      praefect: fake-praefect-token
+    object_storage:
+      access_key: FAKE-ACCESS-KEY
+      secret_key: FAKE-SECRET-KEY
+      endpoint: https://test.compat.objectstorage.us-ashburn-1.oraclecloud.com
+      host: test.compat.objectstorage.us-ashburn-1.oraclecloud.com
+      buckets:
+        artifacts: gitlab-artifacts
+        lfs: gitlab-lfs
+        uploads: gitlab-uploads
+        packages: gitlab-packages
+        external-diffs: gitlab-external-diffs
+        terraform-state: gitlab-terraform-state
+        dependency-proxy: gitlab-dependency-proxy
+        ci-secure-files: gitlab-ci-secure-files
+        backups: gitlab-backups
+        tmp-backups: gitlab-tmp-backups
+        registry: gitlab-registry
+  tasks:
+    - name: Add synthetic backend hosts to inventory
+      ansible.builtin.add_host:
+        name: '{{ item.role }}-{{ item.index }}'
+        groups: '{{ item.role }}'
+        ansible_host: '10.60.8.{{ item.ip }}'
+      loop:
+        - {role: gitaly, index: 1, ip: 11}
+        - {role: gitaly, index: 2, ip: 12}
+        - {role: gitaly, index: 3, ip: 13}
+        - {role: praefect, index: 1, ip: 21}
+        - {role: praefect, index: 2, ip: 22}
+        - {role: praefect, index: 3, ip: 23}
+    - name: Create fixture output directory
+      ansible.builtin.file:
+        path: '{{ output_dir }}'
+        state: directory
+        mode: '0700'
+    - name: Write synthetic TLS inputs for secret-template validation
+      ansible.builtin.copy:
+        content: SYNTHETIC-TEST-ONLY
+        dest: '{{ output_dir }}/{{ item }}'
+        mode: '0600'
+      loop: [ca.crt, fixture.key]
+    - name: Render chart values
+      vars:
+        state_dir: '{{ output_dir }}'
+        backend_pki_dir: '{{ output_dir }}'
+        public_tls_certificate_file: '{{ output_dir }}/ca.crt'
+        public_tls_private_key_file: '{{ output_dir }}/fixture.key'
+      ansible.builtin.template:
+        src: '../ansible/templates/{{ item }}.yml.j2'
+        dest: '{{ output_dir }}/{{ item }}.yml'
+        mode: '0600'
+      loop: [gitlab-values, traefik-values, secrets, routes]
+    - name: Render Gitaly Ruby
+      ansible.builtin.template:
+        src: ../ansible/templates/gitaly.rb.j2
+        dest: '{{ output_dir }}/gitaly.rb'
+        mode: '0600'
+    - name: Render Praefect Ruby
+      ansible.builtin.template:
+        src: ../ansible/templates/praefect.rb.j2
+        dest: '{{ output_dir }}/praefect.rb'
+        mode: '0600'

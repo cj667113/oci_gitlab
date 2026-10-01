@@ -1,0 +1,23 @@
+---
+- name: Permit private backend traffic before the image firewall reject rule
+  ansible.builtin.iptables:
+    chain: INPUT
+    action: insert
+    protocol: tcp
+    source: '{{ item.source }}'
+    destination_port: '{{ item.port }}'
+    jump: ACCEPT
+    comment: gitlab-ansible
+  loop: '{{ backend_firewall_rules }}'
+  vars:
+    backend_firewall_rules: >-
+      {{
+        ([{'source': storage_cidr, 'port': '8076'}, {'source': workers_cidr, 'port': '9236'}]
+          if inventory_hostname in groups.gitaly else
+         [{'source': storage_cidr, 'port': '3305'}, {'source': workers_cidr, 'port': '9652'}])
+        + [{'source': workers_cidr, 'port': '9100'}]
+      }}
+  register: firewall_rules
+- name: Persist host firewall changes
+  ansible.builtin.command: netfilter-persistent save
+  when: firewall_rules.changed

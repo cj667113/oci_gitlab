@@ -1,0 +1,6 @@
+[DEFAULT]
+user=ocid1.user.oc1..REPLACE_WITH_DEPLOYING_USER
+fingerprint=REPLACE_WITH_API_KEY_FINGERPRINT
+tenancy=ocid1.tenancy.oc1..REPLACE
+region=us-ashburn-1
+key_file=/absolute/path/to/oci_gitlab/identity/oci/api_key.pem

@@ -1,0 +1,27 @@
+gitlabUrl: "https://{{ gitlab_host }}"
+certsSecretName: gitlab-loadtest-ca
+concurrent: 3
+checkInterval: 5
+nodeSelector:
+  gitlab-pool: runner
+rbac:
+  create: true
+runners:
+  secret: gitlab-loadtest-runner
+  locked: null
+  config: |
+    [[runners]]
+      request_concurrency = 3
+      [runners.kubernetes]
+        namespace = "gitlab-loadtest"
+        image = "alpine:3.20"
+        cpu_request = "3"
+        memory_request = "8Gi"
+        cpu_limit = "3"
+        memory_limit = "8Gi"
+        [runners.kubernetes.node_selector]
+          gitlab-pool = "runner"
+        [[runners.kubernetes.volumes.secret]]
+          name = "gitlab-loadtest-ca"
+          mount_path = "/etc/gitlab-runner/certs/"
+          read_only = true

@@ -1,0 +1,67 @@
+# IP-literal clients do not send a DNS SNI. Serve our certificate as the default.
+apiVersion: traefik.io/v1alpha1
+kind: TLSStore
+metadata:
+  name: default
+  namespace: {{ gitlab_namespace }}
+spec:
+  defaultCertificate:
+    secretName: gitlab-public-tls
+{% if ip_access %}
+---
+# Use hostless CRD routes: Kubernetes Ingress forbids IP literals in spec.rules.host.
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: gitlab-public-ip
+  namespace: {{ gitlab_namespace }}
+spec:
+  entryPoints: [websecure]
+  routes:
+    - match: PathPrefix(`/`)
+      kind: Rule
+      services:
+        - name: gitlab-webservice-default
+          port: 8181
+  tls:
+    secretName: gitlab-public-tls
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: gitlab-registry-ip
+  namespace: {{ gitlab_namespace }}
+spec:
+  entryPoints: [registry]
+  routes:
+    - match: PathPrefix(`/`)
+      kind: Rule
+      services:
+        - name: gitlab-registry
+          port: 5000
+  tls:
+    secretName: gitlab-public-tls
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: gitlab-kas-ip
+  namespace: {{ gitlab_namespace }}
+spec:
+  entryPoints: [kas]
+  routes:
+    - match: PathPrefix(`/k8s-proxy/`)
+      kind: Rule
+      priority: 20
+      services:
+        - name: gitlab-kas
+          port: 8154
+    - match: PathPrefix(`/`)
+      kind: Rule
+      priority: 10
+      services:
+        - name: gitlab-kas
+          port: 8150
+  tls:
+    secretName: gitlab-public-tls
+{% endif %}

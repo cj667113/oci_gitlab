@@ -1,0 +1,49 @@
+---
+- name: Bootstrap application database using the OCI admin account
+  module_defaults:
+    group/community.postgresql.all:
+      login_host: '{{ postgres[database_spec.system].host }}'
+      login_user: gitlab_admin
+      login_password: '{{ secrets[database_spec.system ~ "_admin"] }}'
+      ssl_mode: verify-full
+      ca_cert: '/etc/gitlab/ssl/postgres-{{ database_spec.system }}.crt'
+  no_log: true
+  block:
+    - name: Create restricted application database role
+      community.postgresql.postgresql_user:
+        login_db: postgres
+        name: '{{ database_spec.role }}'
+        password: '{{ secrets[database_spec.password_key] }}'
+        role_attr_flags: LOGIN,NOSUPERUSER,NOCREATEDB,NOCREATEROLE,NOREPLICATION
+    - name: Check whether the bootstrap administrator can assume the application role
+      community.postgresql.postgresql_query:
+        login_db: postgres
+        query: >-
+          SELECT COALESCE(bool_or(m.set_option), false) AS can_set
+          FROM pg_auth_members m
+          JOIN pg_roles member ON member.oid = m.member
+          JOIN pg_roles granted ON granted.oid = m.roleid
+          WHERE member.rolname = 'gitlab_admin'
+          AND granted.rolname = '{{ database_spec.role }}'
+      register: application_role_membership
+    - name: Allow bootstrap administrator to assign database ownership
+      community.postgresql.postgresql_query:
+        login_db: postgres
+        query: 'GRANT "{{ database_spec.role }}" TO gitlab_admin WITH SET TRUE'
+      when: not application_role_membership.query_result[0].can_set
+    - name: Create application-owned database
+      community.postgresql.postgresql_db:
+        maintenance_db: postgres
+        name: '{{ database_spec.database }}'
+        owner: '{{ database_spec.role }}'
+        encoding: UTF8
+        lc_collate: C
+        lc_ctype: C
+        template: template0
+    - name: Install required GitLab extensions with administrator privileges
+      community.postgresql.postgresql_ext:
+        name: '{{ item }}'
+        login_db: '{{ database_spec.database }}'
+        state: present
+      loop: [amcheck, pg_trgm, btree_gist]
+      when: database_spec.system == 'main'

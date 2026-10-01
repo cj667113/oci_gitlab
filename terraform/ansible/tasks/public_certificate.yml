@@ -1,0 +1,75 @@
+---
+- name: Create the protected identity directory
+  ansible.builtin.file:
+    path: '{{ identity_dir }}'
+    state: directory
+    mode: '0700'
+- name: Check for an existing public certificate
+  ansible.builtin.stat:
+    path: '{{ public_tls_certificate_file }}'
+  register: public_certificate_file
+- name: Check for an existing public private key
+  ansible.builtin.stat:
+    path: '{{ public_tls_private_key_file }}'
+  register: public_private_key_file
+- name: Generate a self-signed pair when either file is missing
+  when: not public_certificate_file.stat.exists or not public_private_key_file.stat.exists
+  block:
+    - name: Generate a missing private key without replacing an existing key
+      community.crypto.openssl_privatekey:
+        path: '{{ public_tls_private_key_file }}'
+        type: RSA
+        size: 3072
+        regenerate: never
+        mode: '0600'
+    - name: Build a certificate request for the public IP and optional DNS names
+      community.crypto.openssl_csr_pipe:
+        privatekey_path: '{{ public_tls_private_key_file }}'
+        common_name: '{{ gitlab_host }}'
+        subject_alt_name: >-
+          {{ ['IP:' ~ public_ip] +
+             ([] if ip_access else ['DNS:gitlab.' ~ gitlab_domain,
+                                    'DNS:registry.' ~ gitlab_domain,
+                                    'DNS:kas.' ~ gitlab_domain]) }}
+        basic_constraints: ['CA:FALSE']
+        key_usage: [digitalSignature, keyEncipherment]
+        extended_key_usage: [serverAuth]
+      register: public_certificate_request
+    - name: Issue the fallback certificate and preserve any orphaned certificate
+      community.crypto.x509_certificate:
+        path: '{{ public_tls_certificate_file }}'
+        privatekey_path: '{{ public_tls_private_key_file }}'
+        csr_content: '{{ public_certificate_request.csr }}'
+        provider: selfsigned
+        selfsigned_not_after: '+365d'
+        backup: true
+        mode: '0644'
+- name: Read public certificate identity
+  community.crypto.x509_certificate_info:
+    path: '{{ public_tls_certificate_file }}'
+    valid_at:
+      now: '+0s'
+  register: public_certificate_info
+- name: Read the public part of the private key
+  community.crypto.openssl_privatekey_info:
+    path: '{{ public_tls_private_key_file }}'
+  register: public_key_info
+  no_log: true
+- name: Require a valid matching certificate for the selected access mode
+  ansible.builtin.assert:
+    that:
+      - public_certificate_info.public_key == public_key_info.public_key
+      - public_certificate_info.valid_at.now
+      - "not ip_access or ('IP:' ~ public_ip) in public_certificate_info.subject_alt_name"
+      - "ip_access or (['DNS:gitlab.' ~ gitlab_domain, 'DNS:registry.' ~ gitlab_domain, 'DNS:kas.' ~ gitlab_domain] | difference(public_certificate_info.subject_alt_name) | length == 0) or ('DNS:*.' ~ gitlab_domain) in public_certificate_info.subject_alt_name"
+    fail_msg: >-
+      The existing certificate/key pair is mismatched, expired, or lacks the selected
+      IP/DNS SANs. Existing complete pairs are preserved. Replace the pair under
+      identity/ or move it aside to request a new self-signed pair.
+- name: Record whether the endpoint uses a self-signed certificate
+  ansible.builtin.set_fact:
+    public_tls_selfsigned: '{{ public_certificate_info.subject == public_certificate_info.issuer }}'
+- name: Restrict private-key access
+  ansible.builtin.file:
+    path: '{{ public_tls_private_key_file }}'
+    mode: '0600'
