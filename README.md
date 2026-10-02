@@ -63,7 +63,7 @@ ssh-keygen -t ed25519 -f identity/ssh/id_ed25519 -C "gitlab-oci"
 cp terraform/terraform.tfvars.example terraform/dev.tfvars
 ```
 
-Edit `identity/oci/config` and `terraform/dev.tfvars` before running Terraform. These files are local configuration and are ignored by Git. The example Terraform inputs use the identity paths created above; the OCI CLI profile's `key_file` must be the **absolute path** to `identity/oci/api_key.pem` in your checkout. Configure the same user, tenancy and fingerprint in both files. Use the `DEFAULT` profile for these commands, or update `OCI_CLI_PROFILE` and `oci_profile` together.
+Edit `identity/oci/config` and `terraform/dev.tfvars` before running Terraform. The example Terraform inputs use the identity paths created above; the OCI CLI profile's `key_file` must be the **absolute path** to `identity/oci/api_key.pem` in your checkout. Configure the same user, tenancy and fingerprint in both files. Use the `DEFAULT` profile for these commands, or update `OCI_CLI_PROFILE` and `oci_profile` together.
 
 Fill in the following inputs:
 
@@ -367,7 +367,7 @@ Remove the temporary override even if you abandon a failed teardown, so later op
 
 By default, preserve the empty state and its normal backup. For an intentional complete local reset, verify teardown first and then explicitly remove `terraform/terraform.tfstate` and `terraform/terraform.tfstate.backup`. Never delete another environment's state. The next deployment starts with `terraform init` and creates a new inventory.
 
-Finish the cache cleanup in step 7 and verify that the identified temporary paths are gone. For the standard Dev layout, only `identity/dev/benchmark/` should remain, unless it also contains user-owned files. State, caches and generated/private files are ignored by Git; ignoring them does not remove them.
+Finish the cache cleanup in step 7 and verify that the identified temporary paths are gone. For the standard Dev layout, only `identity/dev/benchmark/` should remain, unless it also contains user-owned files.
 
 A fresh deployment may receive a different public IP. A retained public TLS pair must cover the new endpoint; supply a matching pair or deliberately renew the generated certificate before running Ansible again.
 
@@ -377,7 +377,7 @@ Step 1 creates the local credential directories using [identity/oci/config.examp
 
 ```text
 identity/
-  oci/config.example             # Tracked example; no private credentials
+  oci/config.example             # Example OCI profile
   oci/config                     # Optional local OCI profile
   oci/api_key.pem                 # Optional local API signing key
   ssh/id_ed25519{,.pub}           # Optional local SSH key pair
@@ -396,7 +396,7 @@ identity/
     benchmark/                   # GitLab Performance Tool native reports, recovery settings, PNG/SVG charts
 ```
 
-`identity/` is ignored by Git except for `oci/config.example`. Keep environment directories mode `0700` and private keys/secrets mode `0600`, with encrypted off-host backups. Preserve these files while the deployment exists; use step 8 to remove generated files after destruction. Public self-signed certificates last 365 days; internal CA and backend certificate lifetimes are ten years and 825 days respectively. Renewal requires deliberate handling because existing keys and complete certificates are preserved.
+Keep environment directories mode `0700` and private keys/secrets mode `0600`, with encrypted off-host backups. Preserve these files while the deployment exists; use step 8 to remove generated files after destruction. Public self-signed certificates last 365 days; internal CA and backend certificate lifetimes are ten years and 825 days respectively. Renewal requires deliberate handling because existing keys and complete certificates are preserved.
 
 ## Architecture and capacity
 
@@ -449,7 +449,7 @@ The API, application nodes, PostgreSQL, cache and repository hosts are private. 
 
 OCI encrypts managed data at rest. Repository block-volume transport encryption is enabled. Buckets have no public access, and GitLab uses path-style S3 requests with streaming signatures disabled as required by [GitLab's OCI object-storage guidance](https://docs.gitlab.com/administration/object_storage/#oracle-cloud-infrastructure). Client downloads are proxied through GitLab/Registry. Registry uses the current `s3_v2` driver with upload checksums disabled for S3 compatibility, following the [GitLab 19 storage-driver guidance](https://docs.gitlab.com/update/versions/gitlab_19_changes/#container-registry-s3-storage-driver-replaced-by-s3_v2).
 
-Terraform state, saved plans, generated inventory and Ansible state contain passwords, private keys or recovery secrets. They are ignored by Git but still exist on disk. Store state in an access-controlled, encrypted backend with appropriate locking before team use, restrict controller access, and keep encrypted off-host copies of `identity/`. The `terraform-state` application bucket stores **users' GitLab Terraform state**, not the deployment's own backend. No backend is silently selected or bootstrapped inside the deployment it protects.
+Terraform state, saved plans, generated inventory and Ansible state contain passwords, private keys or recovery secrets. Store state in an access-controlled, encrypted backend with appropriate locking before team use, restrict controller access, and keep encrypted off-host copies of `identity/`. The `terraform-state` application bucket stores **users' GitLab Terraform state**, not the deployment's own backend. No backend is silently selected or bootstrapped inside the deployment it protects.
 
 Repository volumes, PostgreSQL systems, cache and buckets have `prevent_destroy`. Destruction or replacement requires a deliberate configuration change and a recovery plan. Do not remove those resource definitions to bypass the safeguards. Ansible never forces a filesystem overwrite, uses filesystem UUIDs in fstab, and prevents GitLab from starting without its repository mount.
 
