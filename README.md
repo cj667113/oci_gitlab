@@ -420,15 +420,7 @@ The linked [2k architecture](https://docs.gitlab.com/administration/reference_ar
 
 On the default x86 shapes, one OCPU is two vCPUs. This is intentionally larger than a single-node 2k installation. The application uses 15 compute/OKE nodes plus 6 managed PostgreSQL instances and 3 cache nodes. Dev additionally provisions one public bastion VM and, with `runner_count = 3`, three dedicated OKE runner nodes. Review quotas and the Terraform plan before applying.
 
-### Benchmark findings behind the web sizing
-
-The retained `benchmark-20261001110850` run used GitLab 19.4.0, GitLab Performance Tool 2.17.0 and `60s_40rps`: **79 passed, one failed, 17 blocked** out of 97 inventoried tests. All four former Rails pods were OOMKilled at 7 GiB during `web_user`; its retry reached only 64.79% successful requests. Project listing passed but reached 4,505 ms P90 TTFB at 16.08 RPS. The saved data does not establish database or storage saturation.
-
-The updated configuration uses six Rails pods with 12 GiB requested and limited memory, four Puma workers each, and a 1,500 MB worker memory watchdog. The [watchdog](https://docs.gitlab.com/charts/charts/gitlab/webservice/#memory) acts periodically, so memory headroom remains necessary. Three 8 OCPU / 48 GiB web nodes allow three pods per surviving node after one failure: 12.3 requested vCPUs, 36 GiB Rails memory and up to 1.5 GiB Workhorse memory per node. Verify actual allocatable capacity. Rolling updates use zero surge and one unavailable pod; CPU limits remain unset.
-
-These changes add 6 OCPUs and 48 GiB across the web pool and **have not been benchmarked after redeployment**. Rerun the expanded suite at unchanged rates and thresholds, including the quarantined `web_user` test. Require no new OOM terminations and >99% successful requests for that test. Collect application CPU/memory, worker restarts and backend timing data before attributing latency to a particular service. Generator samples alone do not measure GitLab resource use.
-
-Keep `local.pools.web` in [main.tf](terraform/main.tf) and `web_*` settings in [Ansible defaults](terraform/ansible/group_vars/all.yml) consistent when resizing. Saved reports remain under the private benchmark directory; they are not required in a fresh checkout.
+Run the [benchmark workflow](#6-run-benchmarks-and-generate-pngsvg-charts) against your own deployment and workload before deciding on capacity. Review latency, throughput, request failures and application resource use. Keep `local.pools.web` in [main.tf](terraform/main.tf) and `web_*` settings in [Ansible defaults](terraform/ansible/group_vars/all.yml) consistent when resizing.
 
 ```mermaid
 flowchart LR
